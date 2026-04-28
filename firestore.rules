@@ -15,6 +15,7 @@ service cloud.firestore {
       return isSignedIn() && 
              (request.auth.token.email == 'in8460@hanmail.net' || 
               request.auth.uid == 'iq9RRINd9rPLe5k9nwVC1YWYgTw1');
+      // Note: We are allowing the primary admin even if emailVerified is false for initial setup flexibility.
     }
 
     function isValidId(id) {
@@ -53,7 +54,7 @@ service cloud.firestore {
              data.icon is string && data.icon.size() <= 100 &&
              data.imageUrl is string && data.imageUrl.size() <= 2000000 &&
              data.features is list && data.features.size() <= 50 &&
-             data.order is number;
+             (data.order is number || data.order == null);
     }
  
     function isValidPost(data) {
@@ -63,7 +64,7 @@ service cloud.firestore {
              data.content is string && data.content.size() <= 20000 &&
              data.category in ['공지사항', '뉴스', '포트폴리오'] &&
              data.createdAt is number &&
-             data.order is number &&
+             (data.order is number || data.order == null) &&
              (!data.keys().hasAny(['imageUrl']) || (data.imageUrl is string && data.imageUrl.size() <= 2000000));
     }
  
@@ -73,7 +74,7 @@ service cloud.firestore {
              data.title is string && data.title.size() <= 300 &&
              data.category is string && data.category.size() <= 200 &&
              data.image is string && data.image.size() <= 2000000 &&
-             data.order is number;
+             (data.order is number || data.order == null);
     }
 
     // Collection Rules

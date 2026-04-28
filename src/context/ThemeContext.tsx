@@ -148,7 +148,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   
   const updateSettings = async (newSettings: Partial<SiteSettings>) => {
     try {
-      const updated = { ...settings, ...newSettings };
+      const updated = { ...INITIAL_SETTINGS, ...settings, ...newSettings };
       await setDoc(doc(db, 'siteConfig', 'settings'), updated);
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, 'siteConfig/settings');
@@ -178,7 +178,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     try {
       const existing = portfolio.find(item => item.id === id) || INITIAL_PORTFOLIO.find(item => item.id === id);
       if (!existing) throw new Error('Existing portfolio item not found for update');
-      const fullItem = { ...existing, ...updatedItem };
+      const fullItem = { 
+        ...existing, 
+        ...updatedItem,
+        order: updatedItem.order !== undefined ? updatedItem.order : (existing.order ?? 0)
+      };
       fullItem.id = id;
       await setDoc(doc(db, 'portfolio', id.toString()), fullItem);
     } catch (error) {
@@ -228,7 +232,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     try {
       const existing = services.find(s => s.id === id) || INITIAL_SERVICES.find(s => s.id === id);
       if (!existing) throw new Error('Existing service not found for update');
-      const fullService = { ...existing, ...updatedService };
+      const fullService = { 
+        ...existing, 
+        ...updatedService,
+        order: updatedService.order !== undefined ? updatedService.order : (existing.order ?? 0)
+      };
       fullService.id = id;
       await setDoc(doc(db, 'services', id), fullService);
     } catch (error) {
@@ -278,7 +286,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     try {
       const existing = news.find(n => n.id === id) || INITIAL_NEWS.find(n => n.id === id);
       if (!existing) throw new Error('Existing post not found for update');
-      const fullPost = { ...existing, ...updatedNews };
+      const fullPost = { 
+        ...existing, 
+        ...updatedNews,
+        order: updatedNews.order !== undefined ? updatedNews.order : (existing.order ?? 0)
+      };
       fullPost.id = id;
       await setDoc(doc(db, 'news', id), fullPost);
     } catch (error) {
