@@ -12,7 +12,9 @@ import {
   Trash2,
   Palette,
   ExternalLink,
-  Database
+  Database,
+  ChevronUp,
+  ChevronDown
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
@@ -28,18 +30,84 @@ export function AdminDashboard() {
     addItem, 
     removeItem, 
     updateItem,
+    reorderPortfolio,
     services,
     addService,
     removeService,
     updateService,
+    reorderServices,
     news,
     addNews,
     removeNews,
     updateNews,
+    reorderNews,
     isLoaded
   } = useTheme();
+  
+  // Local draft states for smooth typing
+  const [localSettings, setLocalSettings] = useState(settings);
+  const [localServices, setLocalServices] = useState(services);
+  const [localNews, setLocalNews] = useState(news);
+  const [localPortfolio, setLocalPortfolio] = useState(portfolio);
+  const [isDirty, setIsDirty] = useState(false);
+  const [lastSaved, setLastSaved] = useState<number>(Date.now());
+
+  // Initialize local states when global data loads
+  useEffect(() => {
+    if (isLoaded) {
+      setLocalSettings(settings);
+      setLocalServices(services);
+      setLocalNews(news);
+      setLocalPortfolio(portfolio);
+    }
+  }, [isLoaded, settings, services, news, portfolio]);
+
   const [saveMessage, setSaveMessage] = useState('');
   const navigate = useNavigate();
+
+  // Manual save all
+  const handleSaveAll = async () => {
+    if (!isDirty) return;
+    
+    setSaveMessage('저장 중...');
+    try {
+      // Sync all local changes
+      await updateSettings(localSettings);
+      
+      // Sync services (only updated ones)
+      for (const service of localServices) {
+        await updateService(service.id, service);
+      }
+      
+      // Sync news
+      for (const post of localNews) {
+        await updateNews(post.id, post);
+      }
+      
+      // Sync portfolio
+      for (const item of localPortfolio) {
+        await updateItem(item.id, item);
+      }
+      
+      setIsDirty(false);
+      setLastSaved(Date.now());
+      setSaveMessage('모든 변경사항이 안전하게 저장되었습니다.');
+    } catch (error) {
+      console.error('Save all failed:', error);
+      setSaveMessage('저장 중 오류가 발생했습니다.');
+    }
+  };
+
+  // Auto-save logic (debounced)
+  useEffect(() => {
+    if (!isDirty) return;
+    
+    const timer = setTimeout(() => {
+      handleSaveAll();
+    }, 5000); // Auto-save after 5 seconds of inactivity
+    
+    return () => clearTimeout(timer);
+  }, [isDirty, localSettings, localServices, localNews, localPortfolio]);
 
   // Auth check
   useEffect(() => {
@@ -93,8 +161,8 @@ export function AdminDashboard() {
             
             // Final check
             const sizeKB = Math.round((compressed.length * 3) / 4 / 1024);
-            if (sizeKB > 950) {
-              alert(`압축 후에도 이미지 크기가 너무 큽니다 (${sizeKB}KB). 다른 이미지를 선택하거나 크기를 줄여주세요.`);
+            if (sizeKB > 650) {
+              alert(`압축 후에도 이미지 크기가 너무 큽니다 (${sizeKB}KB). 다른 이미지를 선택하거나 크기를 더 줄여주세요.`);
               setIsUploading(false);
               return;
             }
@@ -123,6 +191,14 @@ export function AdminDashboard() {
   const [newProjectTitle, setNewProjectTitle] = useState('');
   const [newProjectCategory, setNewProjectCategory] = useState('행사기획');
 
+  const [isAddingService, setIsAddingService] = useState(false);
+  const [newServiceTitle, setNewServiceTitle] = useState('');
+  const [newServiceDesc, setNewServiceDesc] = useState('');
+
+  const [isAddingNews, setIsAddingNews] = useState(false);
+  const [newNewsTitle, setNewNewsTitle] = useState('');
+  const [newNewsCategory, setNewNewsCategory] = useState<'공지사항' | '뉴스' | '포트폴리오'>('공지사항');
+
   const handleAddProject = () => {
     if (!newProjectTitle.trim()) {
       alert('프로젝트 제목을 입력해주세요.');
@@ -136,6 +212,69 @@ export function AdminDashboard() {
     setNewProjectTitle('');
     setIsAddingProject(false);
     setSaveMessage('새 프로젝트가 추가되었습니다.');
+  };
+
+  const handleAddService = () => {
+    if (!newServiceTitle.trim()) {
+      alert('서비스 제목을 입력해주세요.');
+      return;
+    }
+    addService({
+      title: newServiceTitle,
+      description: newServiceDesc || '서비스 설명을 입력해주세요.',
+      icon: 'Star',
+      imageUrl: 'https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&q=80',
+      features: ['상세 항목을 추가하세요']
+    });
+    setNewServiceTitle('');
+    setNewServiceDesc('');
+    setIsAddingService(false);
+    setSaveMessage('새 서비스가 추가되었습니다.');
+  };
+
+  const handleAddNews = () => {
+    if (!newNewsTitle.trim()) {
+      alert('공지사항 제목을 입력해주세요.');
+      return;
+    }
+    addNews({
+      title: newNewsTitle,
+      content: '내용을 입력하세요.',
+      category: newNewsCategory
+    });
+    setNewNewsTitle('');
+    setIsAddingNews(false);
+    setSaveMessage('새 공지사항이 추가되었습니다.');
+  };
+
+  const handleMoveService = async (index: number, direction: 'up' | 'down') => {
+    const newServices = [...services];
+    const newIndex = direction === 'up' ? index - 1 : index + 1;
+    if (newIndex < 0 || newIndex >= newServices.length) return;
+    
+    [newServices[index], newServices[newIndex]] = [newServices[newIndex], newServices[index]];
+    await reorderServices(newServices);
+    setSaveMessage('순서가 변경되었습니다.');
+  };
+
+  const handleMoveNews = async (index: number, direction: 'up' | 'down') => {
+    const newNews = [...news];
+    const newIndex = direction === 'up' ? index - 1 : index + 1;
+    if (newIndex < 0 || newIndex >= newNews.length) return;
+    
+    [newNews[index], newNews[newIndex]] = [newNews[newIndex], newNews[index]];
+    await reorderNews(newNews);
+    setSaveMessage('순서가 변경되었습니다.');
+  };
+
+  const handleMovePortfolio = async (index: number, direction: 'up' | 'down') => {
+    const newPortfolio = [...portfolio];
+    const newIndex = direction === 'up' ? index - 1 : index + 1;
+    if (newIndex < 0 || newIndex >= newPortfolio.length) return;
+    
+    [newPortfolio[index], newPortfolio[newIndex]] = [newPortfolio[newIndex], newPortfolio[index]];
+    await reorderPortfolio(newPortfolio);
+    setSaveMessage('순서가 변경되었습니다.');
   };
 
   return (
@@ -154,9 +293,9 @@ export function AdminDashboard() {
             { id: 'services', label: '서비스 관리', icon: Layout },
             { id: 'news', label: '공지사항 관리', icon: FileText },
             { id: 'portfolio', label: '포트폴리오 관리', icon: Layout },
-          ].map(item => (
+          ].map((item, index) => (
             <button
-              key={item.id}
+              key={`nav-${item.id}-${index}`}
               onClick={() => setActiveTab(item.id as any)}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
                 activeTab === item.id ? 'bg-navy-primary text-white shadow-lg' : 'text-white/40 hover:bg-white/5'
@@ -233,10 +372,15 @@ export function AdminDashboard() {
             </motion.div>
           ) : (
             <button 
-              onClick={() => setSaveMessage('모든 변경사항이 저장되었습니다.')}
-              className="px-6 py-3 bg-white text-black font-bold rounded-xl flex items-center gap-2 hover:bg-navy-light hover:text-white transition-all shadow-lg shadow-black/20"
+              onClick={handleSaveAll}
+              disabled={!isDirty}
+              className={`px-6 py-3 font-bold rounded-xl flex items-center gap-2 transition-all shadow-lg shadow-black/20 ${
+                isDirty 
+                  ? 'bg-navy-primary text-white hover:bg-navy-light' 
+                  : 'bg-white/5 text-white/20 cursor-not-allowed border border-white/5'
+              }`}
             >
-              <Save size={18} /> 변경사항 저장하기
+              <Save size={18} /> {isDirty ? '변경사항 저장하기' : '변경사항 없음'}
             </button>
           )}
         </header>
@@ -252,8 +396,11 @@ export function AdminDashboard() {
                   <label className="text-xs font-bold text-white/40 tracking-wider">웹사이트 명칭</label>
                   <input 
                     type="text" 
-                    value={settings.siteName}
-                    onChange={(e) => updateSettings({ siteName: e.target.value })}
+                    value={localSettings.siteName}
+                    onChange={(e) => {
+                      setLocalSettings({ ...localSettings, siteName: e.target.value });
+                      setIsDirty(true);
+                    }}
                     className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:border-navy-light focus:outline-none" 
                   />
                 </div>
@@ -261,8 +408,11 @@ export function AdminDashboard() {
                   <label className="text-xs font-bold text-white/40 tracking-wider">사이트 설명 (SEO)</label>
                   <input 
                     type="text" 
-                    value={settings.description}
-                    onChange={(e) => updateSettings({ description: e.target.value })}
+                    value={localSettings.description}
+                    onChange={(e) => {
+                      setLocalSettings({ ...localSettings, description: e.target.value });
+                      setIsDirty(true);
+                    }}
                     className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:border-navy-light focus:outline-none" 
                   />
                 </div>
@@ -279,13 +429,16 @@ export function AdminDashboard() {
                   <div className="flex gap-4">
                     <input 
                       type="color" 
-                      value={settings.primaryColor}
-                      onChange={(e) => updateSettings({ primaryColor: e.target.value })}
+                      value={localSettings.primaryColor}
+                      onChange={(e) => {
+                        setLocalSettings({ ...localSettings, primaryColor: e.target.value });
+                        setIsDirty(true);
+                      }}
                       className="h-11 w-20 bg-transparent border-none rounded cursor-pointer" 
                     />
                     <input 
                       type="text" 
-                      value={settings.primaryColor}
+                      value={localSettings.primaryColor}
                       readOnly
                       className="flex-grow bg-white/5 border border-white/10 rounded-xl px-4 text-xs font-mono" 
                     />
@@ -307,8 +460,11 @@ export function AdminDashboard() {
                   <label className="text-xs font-bold text-white/40 tracking-wider">배지 텍스트</label>
                   <input 
                     type="text" 
-                    value={settings.heroBadge}
-                    onChange={(e) => updateSettings({ heroBadge: e.target.value })}
+                    value={localSettings.heroBadge}
+                    onChange={(e) => {
+                      setLocalSettings({ ...localSettings, heroBadge: e.target.value });
+                      setIsDirty(true);
+                    }}
                     className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:border-navy-light focus:outline-none" 
                   />
                 </div>
@@ -316,7 +472,7 @@ export function AdminDashboard() {
                   <label className="text-xs font-bold text-white/40 tracking-wider">배경 이미지 (파일 첨부)</label>
                   <div className="flex items-center gap-4">
                     <div className="w-16 h-10 rounded bg-white/5 overflow-hidden border border-white/10">
-                      <img src={settings.heroImageUrl} className="w-full h-full object-cover" />
+                      <img src={localSettings.heroImageUrl} className="w-full h-full object-cover" />
                     </div>
                     <label className={`flex-grow cursor-pointer group ${isUploading ? 'opacity-50 pointer-events-none' : ''}`}>
                       <div className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 text-xs text-white/40 group-hover:border-navy-light group-hover:text-white transition-all flex items-center gap-2">
@@ -328,7 +484,10 @@ export function AdminDashboard() {
                         accept="image/*"
                         className="hidden"
                         disabled={isUploading}
-                        onChange={(e) => handleImageUpload(e, (url) => updateSettings({ heroImageUrl: url }))}
+                        onChange={(e) => handleImageUpload(e, (url) => {
+                          setLocalSettings({ ...localSettings, heroImageUrl: url });
+                          setIsDirty(true);
+                        })}
                       />
                     </label>
                   </div>
@@ -337,8 +496,11 @@ export function AdminDashboard() {
                   <label className="text-xs font-bold text-white/40 tracking-wider">메인 타이틀 1</label>
                   <input 
                     type="text" 
-                    value={settings.heroTitle1}
-                    onChange={(e) => updateSettings({ heroTitle1: e.target.value })}
+                    value={localSettings.heroTitle1}
+                    onChange={(e) => {
+                      setLocalSettings({ ...localSettings, heroTitle1: e.target.value });
+                      setIsDirty(true);
+                    }}
                     className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:border-navy-light focus:outline-none" 
                   />
                 </div>
@@ -346,8 +508,11 @@ export function AdminDashboard() {
                   <label className="text-xs font-bold text-white/40 tracking-wider">메인 타이틀 2 (강조)</label>
                   <input 
                     type="text" 
-                    value={settings.heroTitle2}
-                    onChange={(e) => updateSettings({ heroTitle2: e.target.value })}
+                    value={localSettings.heroTitle2}
+                    onChange={(e) => {
+                      setLocalSettings({ ...localSettings, heroTitle2: e.target.value });
+                      setIsDirty(true);
+                    }}
                     className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:border-navy-light focus:outline-none" 
                     placeholder="하이라이트 텍스트"
                   />
@@ -355,8 +520,11 @@ export function AdminDashboard() {
                 <div className="md:col-span-2 space-y-2">
                   <label className="text-xs font-bold text-white/40 tracking-wider">히어로 설명문</label>
                   <textarea 
-                    value={settings.heroDescription}
-                    onChange={(e) => updateSettings({ heroDescription: e.target.value })}
+                    value={localSettings.heroDescription}
+                    onChange={(e) => {
+                      setLocalSettings({ ...localSettings, heroDescription: e.target.value });
+                      setIsDirty(true);
+                    }}
                     className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:border-navy-light focus:outline-none h-32 resize-none" 
                   />
                 </div>
@@ -367,27 +535,89 @@ export function AdminDashboard() {
 
         {activeTab === 'services' && (
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-            <div className="flex justify-end">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-bold flex items-center gap-2">
+                <Layout size={24} className="text-navy-light" /> 서비스 목록
+              </h2>
               <button 
-                onClick={() => {
-                  const title = prompt('서비스 제목을 입력하세요:');
-                  if (title) addService({ 
-                    title, 
-                    description: '서비스 설명을 입력해주세요.', 
-                    icon: 'Star', 
-                    imageUrl: 'https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&q=80',
-                    features: ['상세 항목을 추가하세요']
-                  });
-                }}
-                className="px-5 py-3 bg-navy-primary text-white text-sm font-bold rounded-xl flex items-center gap-2 hover:bg-navy-light transition-all"
+                onClick={() => setIsAddingService(!isAddingService)}
+                className={`px-5 py-3 rounded-xl flex items-center gap-2 font-bold transition-all ${
+                  isAddingService 
+                    ? 'bg-white/10 text-white border border-white/20' 
+                    : 'bg-navy-primary text-white hover:bg-navy-light shadow-lg'
+                }`}
               >
-                <Plus size={18} /> 새 서비스 추가
+                {isAddingService ? '취소하기' : <><Plus size={18} /> 새 서비스 추가</>}
               </button>
             </div>
 
+            {isAddingService && (
+              <motion.div 
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                className="glass-card p-8 border-navy-light/30 border-2"
+              >
+                <h3 className="text-lg font-bold mb-6 flex items-center gap-2">
+                  <Plus size={20} className="text-navy-light" /> 새 서비스 정보 입력
+                </h3>
+                <div className="space-y-4 mb-6">
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-white/40 tracking-wider">서비스 명칭</label>
+                    <input 
+                      type="text" 
+                      value={newServiceTitle}
+                      onChange={(e) => setNewServiceTitle(e.target.value)}
+                      placeholder="서비스 제목을 입력하세요"
+                      className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:border-navy-light focus:outline-none" 
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-white/40 tracking-wider">서비스 설명</label>
+                    <textarea 
+                      value={newServiceDesc}
+                      onChange={(e) => setNewServiceDesc(e.target.value)}
+                      placeholder="서비스에 대한 간략한 설명을 입력하세요"
+                      className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:border-navy-light focus:outline-none h-24 resize-none" 
+                    />
+                  </div>
+                </div>
+                <div className="flex justify-end gap-3">
+                  <button 
+                    onClick={() => setIsAddingService(false)}
+                    className="px-6 py-2 rounded-xl text-sm font-bold text-white/40 hover:text-white transition-all"
+                  >
+                    취소
+                  </button>
+                  <button 
+                    onClick={handleAddService}
+                    className="px-8 py-2 bg-navy-primary text-white rounded-xl text-sm font-bold hover:bg-navy-light transition-all shadow-lg"
+                  >
+                    추가 완료
+                  </button>
+                </div>
+              </motion.div>
+            )}
+
             <div className="grid grid-cols-1 gap-6">
-              {services.map((service) => (
-                <div key={service.id} className="glass-card p-8 flex flex-col lg:flex-row gap-8">
+              {localServices.map((service, index) => (
+                <div key={`service-${service.id}-${index}`} className="glass-card p-8 flex flex-col lg:flex-row gap-8 relative">
+                  {/* Reorder Controls */}
+                  <div className="absolute top-4 right-4 flex flex-col gap-2">
+                    <button 
+                      onClick={() => handleMoveService(index, 'up')}
+                      disabled={index === 0}
+                      className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/40 hover:text-white disabled:opacity-20 transition-all"
+                    >
+                      <ChevronUp size={16} />
+                    </button>
+                    <button 
+                      onClick={() => handleMoveService(index, 'down')}
+                      disabled={index === services.length - 1}
+                      className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/40 hover:text-white disabled:opacity-20 transition-all"
+                    >
+                      <ChevronDown size={16} />
+                    </button>
+                  </div>
                   <div className="w-full lg:w-48 h-32 rounded-xl overflow-hidden shrink-0">
                     <img src={service.imageUrl} alt={service.title} className="w-full h-full object-cover" />
                   </div>
@@ -398,7 +628,12 @@ export function AdminDashboard() {
                         <input 
                           type="text" 
                           value={service.title}
-                          onChange={(e) => updateService(service.id, { title: e.target.value })}
+                          onChange={(e) => {
+                            const newServices = [...localServices];
+                            newServices[index] = { ...service, title: e.target.value };
+                            setLocalServices(newServices);
+                            setIsDirty(true);
+                          }}
                           className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-3 text-sm focus:border-navy-light focus:outline-none" 
                         />
                       </div>
@@ -407,7 +642,12 @@ export function AdminDashboard() {
                         <input 
                           type="text" 
                           value={service.icon}
-                          onChange={(e) => updateService(service.id, { icon: e.target.value })}
+                          onChange={(e) => {
+                            const newServices = [...localServices];
+                            newServices[index] = { ...service, icon: e.target.value };
+                            setLocalServices(newServices);
+                            setIsDirty(true);
+                          }}
                           className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-3 text-sm focus:border-navy-light focus:outline-none" 
                         />
                       </div>
@@ -416,7 +656,12 @@ export function AdminDashboard() {
                       <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest leading-none">설명</label>
                       <textarea 
                         value={service.description}
-                        onChange={(e) => updateService(service.id, { description: e.target.value })}
+                        onChange={(e) => {
+                          const newServices = [...localServices];
+                          newServices[index] = { ...service, description: e.target.value };
+                          setLocalServices(newServices);
+                          setIsDirty(true);
+                        }}
                         className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-3 text-sm focus:border-navy-light focus:outline-none h-20 resize-none" 
                       />
                     </div>
@@ -424,21 +669,27 @@ export function AdminDashboard() {
                       <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest leading-none">상세 항목 (Features)</label>
                       <div className="space-y-2">
                         {service.features?.map((feature, fIndex) => (
-                          <div key={fIndex} className="flex gap-2">
+                          <div key={`${service.id}-feature-${fIndex}`} className="flex gap-2">
                             <input 
                               type="text" 
                               value={feature}
                               onChange={(e) => {
+                                const newServices = [...localServices];
                                 const newFeatures = [...(service.features || [])];
                                 newFeatures[fIndex] = e.target.value;
-                                updateService(service.id, { features: newFeatures });
+                                newServices[index] = { ...service, features: newFeatures };
+                                setLocalServices(newServices);
+                                setIsDirty(true);
                               }}
                               className="flex-grow bg-white/5 border border-white/10 rounded-lg py-2 px-3 text-sm focus:border-navy-light focus:outline-none" 
                             />
                             <button 
                               onClick={() => {
+                                const newServices = [...localServices];
                                 const newFeatures = (service.features || []).filter((_, i) => i !== fIndex);
-                                updateService(service.id, { features: newFeatures });
+                                newServices[index] = { ...service, features: newFeatures };
+                                setLocalServices(newServices);
+                                setIsDirty(true);
                               }}
                               className="p-2 text-red-500 hover:bg-red-500/10 rounded-lg transition-colors border border-white/5"
                             >
@@ -448,8 +699,11 @@ export function AdminDashboard() {
                         ))}
                         <button 
                           onClick={() => {
+                            const newServices = [...localServices];
                             const newFeatures = [...(service.features || []), '새로운 항목'];
-                            updateService(service.id, { features: newFeatures });
+                            newServices[index] = { ...service, features: newFeatures };
+                            setLocalServices(newServices);
+                            setIsDirty(true);
                           }}
                           className="w-full py-2 bg-white/5 border border-dashed border-white/20 rounded-lg text-xs text-white/40 hover:text-white hover:border-navy-light transition-all flex items-center justify-center gap-2"
                         >
@@ -469,7 +723,12 @@ export function AdminDashboard() {
                           accept="image/*"
                           className="hidden"
                           disabled={isUploading}
-                          onChange={(e) => handleImageUpload(e, (url) => updateService(service.id, { imageUrl: url }))}
+                          onChange={(e) => handleImageUpload(e, (url) => {
+                            const newServices = [...localServices];
+                            newServices[index] = { ...service, imageUrl: url };
+                            setLocalServices(newServices);
+                            setIsDirty(true);
+                          })}
                         />
                       </label>
                     </div>
@@ -492,25 +751,77 @@ export function AdminDashboard() {
 
         {activeTab === 'news' && (
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-            <div className="flex justify-end mb-6">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-bold flex items-center gap-2">
+                <FileText size={24} className="text-navy-light" /> 공지사항 목록
+              </h2>
               <button 
-                onClick={() => {
-                  const title = prompt('제목을 입력하세요:');
-                  if (title) addNews({ 
-                    title, 
-                    content: '내용을 입력하세요.', 
-                    category: '공지사항' 
-                  });
-                }}
-                className="px-5 py-3 bg-navy-primary text-white text-sm font-bold rounded-xl flex items-center gap-2 hover:bg-navy-light transition-all"
+                onClick={() => setIsAddingNews(!isAddingNews)}
+                className={`px-5 py-3 rounded-xl flex items-center gap-2 font-bold transition-all ${
+                  isAddingNews 
+                    ? 'bg-white/10 text-white border border-white/20' 
+                    : 'bg-navy-primary text-white hover:bg-navy-light shadow-lg'
+                }`}
               >
-                <Plus size={18} /> 새 글 작성하기
+                {isAddingNews ? '취소하기' : <><Plus size={18} /> 새 글 작성하기</>}
               </button>
             </div>
+
+            {isAddingNews && (
+              <motion.div 
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                className="glass-card p-8 border-navy-light/30 border-2 mb-8"
+              >
+                <h3 className="text-lg font-bold mb-6 flex items-center gap-2">
+                  <Plus size={20} className="text-navy-light" /> 새 공지사항 정보 입력
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-white/40 tracking-wider">제목</label>
+                    <input 
+                      type="text" 
+                      value={newNewsTitle}
+                      onChange={(e) => setNewNewsTitle(e.target.value)}
+                      placeholder="공지사항 제목을 입력하세요"
+                      className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:border-navy-light focus:outline-none" 
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-white/40 tracking-wider">카테고리</label>
+                    <select 
+                      value={newNewsCategory}
+                      onChange={(e) => setNewNewsCategory(e.target.value as any)}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:border-navy-light focus:outline-none"
+                    >
+                      <option value="공지사항">공지사항</option>
+                      <option value="뉴스">뉴스</option>
+                      <option value="포트폴리오">포트폴리오</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="flex justify-end gap-3">
+                  <button 
+                    onClick={() => setIsAddingNews(false)}
+                    className="px-6 py-2 rounded-xl text-sm font-bold text-white/40 hover:text-white transition-all"
+                  >
+                    취소
+                  </button>
+                  <button 
+                    onClick={handleAddNews}
+                    className="px-8 py-2 bg-navy-primary text-white rounded-xl text-sm font-bold hover:bg-navy-light transition-all shadow-lg"
+                  >
+                    작성 완료
+                  </button>
+                </div>
+              </motion.div>
+            )}
+
             <div className="glass-card overflow-hidden">
               <table className="w-full text-left">
                 <thead className="bg-white/5 border-b border-white/10">
                   <tr>
+                    <th className="px-6 py-4 text-xs font-bold uppercase tracking-widest text-white/40">순서</th>
                     <th className="px-6 py-4 text-xs font-bold uppercase tracking-widest text-white/40">카테고리</th>
                     <th className="px-6 py-4 text-xs font-bold uppercase tracking-widest text-white/40">제목</th>
                     <th className="px-6 py-4 text-xs font-bold uppercase tracking-widest text-white/40">작성일</th>
@@ -518,12 +829,35 @@ export function AdminDashboard() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
-                  {news.map(post => (
-                    <tr key={post.id} className="hover:bg-white/5 transition-colors">
+                  {localNews.map((post, index) => (
+                    <tr key={`news-${post.id}-${index}`} className="hover:bg-white/5 transition-colors">
+                      <td className="px-6 py-4">
+                        <div className="flex flex-col gap-1">
+                          <button 
+                            onClick={() => handleMoveNews(index, 'up')}
+                            disabled={index === 0}
+                            className="p-1 rounded bg-white/5 hover:bg-white/10 text-white/40 hover:text-white disabled:opacity-20"
+                          >
+                            <ChevronUp size={12} />
+                          </button>
+                          <button 
+                            onClick={() => handleMoveNews(index, 'down')}
+                            disabled={index === news.length - 1}
+                            className="p-1 rounded bg-white/5 hover:bg-white/10 text-white/40 hover:text-white disabled:opacity-20"
+                          >
+                            <ChevronDown size={12} />
+                          </button>
+                        </div>
+                      </td>
                       <td className="px-6 py-4">
                         <select
                           value={post.category}
-                          onChange={(e) => updateNews(post.id, { category: e.target.value as any })}
+                          onChange={(e) => {
+                            const newNews = [...localNews];
+                            newNews[index] = { ...post, category: e.target.value as any };
+                            setLocalNews(newNews);
+                            setIsDirty(true);
+                          }}
                           className="text-xs px-2 py-1 bg-navy-primary/20 text-navy-light rounded font-bold border-none focus:outline-none appearance-none cursor-pointer"
                         >
                           <option value="공지사항">공지사항</option>
@@ -534,7 +868,12 @@ export function AdminDashboard() {
                         <input 
                           type="text"
                           value={post.title}
-                          onChange={(e) => updateNews(post.id, { title: e.target.value })}
+                          onChange={(e) => {
+                            const newNews = [...localNews];
+                            newNews[index] = { ...post, title: e.target.value };
+                            setLocalNews(newNews);
+                            setIsDirty(true);
+                          }}
                           className="bg-transparent border-none focus:outline-none w-full"
                         />
                       </td>
@@ -555,7 +894,7 @@ export function AdminDashboard() {
                       </td>
                     </tr>
                   ))}
-                  {news.length === 0 && (
+                  {localNews.length === 0 && (
                     <tr>
                       <td colSpan={4} className="px-6 py-12 text-center text-white/20 italic">
                         작성된 공지사항이 없습니다.
@@ -614,8 +953,8 @@ export function AdminDashboard() {
                       className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:border-navy-light focus:outline-none"
                     >
                       <option value="행사기획">행사기획</option>
-                      <option value="행사대행">행사대행</option>
                       <option value="방송기획">방송기획</option>
+                      <option value="마케팅">마케팅</option>
                       <option value="기타">기타</option>
                     </select>
                   </div>
@@ -638,8 +977,25 @@ export function AdminDashboard() {
             )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {portfolio.map((item) => (
-                <div key={item.id} className="glass-card overflow-hidden flex flex-col">
+              {portfolio.map((item, index) => (
+                <div key={`portfolio-${item.id}-${index}`} className="glass-card overflow-hidden flex flex-col relative group/card">
+                  {/* Reorder Buttons */}
+                  <div className="absolute top-2 left-2 z-10 opacity-0 group-hover/card:opacity-100 transition-opacity flex flex-col gap-1">
+                    <button 
+                      onClick={() => handleMovePortfolio(index, 'up')}
+                      disabled={index === 0}
+                      className="p-1.5 rounded-lg bg-black/60 hover:bg-black/80 text-white disabled:opacity-20"
+                    >
+                      <ChevronUp size={14} />
+                    </button>
+                    <button 
+                      onClick={() => handleMovePortfolio(index, 'down')}
+                      disabled={index === portfolio.length - 1}
+                      className="p-1.5 rounded-lg bg-black/60 hover:bg-black/80 text-white disabled:opacity-20"
+                    >
+                      <ChevronDown size={14} />
+                    </button>
+                  </div>
                   <div className="aspect-video relative overflow-hidden group">
                     <img src={item.image} alt={item.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
                     <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">

@@ -31,9 +31,9 @@ export async function compressImage(base64Str: string, maxWidth = 1000, maxHeigh
 
       const compressedBase64 = canvas.toDataURL('image/jpeg', quality);
       
-      // Check if size is within Firestore limits (approx 1MB limit, keeping safe at 800KB)
+      // Check if size is within Firestore limits (approx 1MB limit, keeping safe at 600KB)
       const sizeInBytes = Math.round((compressedBase64.length * 3) / 4);
-      if (sizeInBytes > 800000) {
+      if (sizeInBytes > 600000) {
         // If still too large, try even smaller
         const extremeCanvas = document.createElement('canvas');
         extremeCanvas.width = width * 0.7;

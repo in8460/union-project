@@ -23,17 +23,20 @@ interface ThemeContextType {
   settings: SiteSettings;
   updateSettings: (newSettings: Partial<SiteSettings>) => void;
   portfolio: PortfolioItem[];
-  addItem: (item: Omit<PortfolioItem, 'id'>) => void;
+  addItem: (item: Omit<PortfolioItem, 'id' | 'order'>) => void;
   removeItem: (id: number) => void;
   updateItem: (id: number, item: Partial<PortfolioItem>) => void;
+  reorderPortfolio: (items: PortfolioItem[]) => Promise<void>;
   services: Service[];
-  addService: (service: Omit<Service, 'id'>) => void;
+  addService: (service: Omit<Service, 'id' | 'order'>) => void;
   removeService: (id: string) => void;
   updateService: (id: string, service: Partial<Service>) => void;
+  reorderServices: (items: Service[]) => Promise<void>;
   news: Post[];
-  addNews: (news: Omit<Post, 'id' | 'createdAt'>) => void;
+  addNews: (news: Omit<Post, 'id' | 'createdAt' | 'order'>) => void;
   removeNews: (id: string) => void;
   updateNews: (id: string, news: Partial<Post>) => void;
+  reorderNews: (items: Post[]) => Promise<void>;
   isLoaded: boolean;
 }
 
@@ -69,13 +72,9 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         localforage.setItem('union_settings', data);
         document.documentElement.style.setProperty('--primary-color', data.primaryColor);
       } else {
-        // If document doesn't exist, we just live with INITIAL_SETTINGS.
-        // DO NOT try to setDoc here, as it will fail for non-admin users.
-        // Normal initialization should happen when an admin first saves settings.
         console.log('Site settings not found in Firestore, using defaults.');
       }
     }, (error) => {
-      // If it's just a 403 on a non-existent doc, we can be quiet, but handleFirestoreError is helpful for debugging.
       handleFirestoreError(error, OperationType.GET, 'siteConfig/settings');
     });
 
@@ -89,9 +88,13 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       snapshot.forEach((doc) => {
         items.push(doc.data() as PortfolioItem);
       });
-      // Sort by ID (timestamp) or some other logic if needed. 
-      // Existing code uses Date.now() as ID.
-      const sortedItems = items.sort((a, b) => b.id - a.id);
+      // Sort by order if available, else by id
+      const sortedItems = items.sort((a, b) => {
+        if (a.order !== undefined && b.order !== undefined) {
+          return a.order - b.order;
+        }
+        return b.id - a.id;
+      });
       setPortfolio(sortedItems.length > 0 ? sortedItems : INITIAL_PORTFOLIO);
       localforage.setItem('union_portfolio', sortedItems);
     }, (error) => {
@@ -108,8 +111,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       snapshot.forEach((doc) => {
         items.push(doc.data() as Service);
       });
-      setServices(items.length > 0 ? items : INITIAL_SERVICES);
-      localforage.setItem('union_services', items);
+      // Sort by order 
+      const sortedItems = items.sort((a, b) => (a.order || 0) - (b.order || 0));
+      setServices(sortedItems.length > 0 ? sortedItems : INITIAL_SERVICES);
+      localforage.setItem('union_services', sortedItems);
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, 'services');
     });
@@ -124,10 +129,15 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       snapshot.forEach((doc) => {
         items.push(doc.data() as Post);
       });
-      const sortedItems = items.sort((a, b) => b.createdAt - a.createdAt);
+      // Sort by order, then by createdAt
+      const sortedItems = items.sort((a, b) => {
+        if (a.order !== undefined && b.order !== undefined) {
+          return a.order - b.order;
+        }
+        return b.createdAt - a.createdAt;
+      });
       setNews(sortedItems.length > 0 ? sortedItems : INITIAL_NEWS);
       localforage.setItem('union_news', sortedItems);
-      // Mark as loaded when news (usually last) is fetched
       setIsLoaded(true);
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, 'news');
@@ -145,10 +155,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const addItem = async (item: Omit<PortfolioItem, 'id'>) => {
+  const addItem = async (item: Omit<PortfolioItem, 'id' | 'order'>) => {
     try {
       const id = Date.now();
-      const newItem = { ...item, id };
+      const maxOrder = portfolio.reduce((max, i) => Math.max(max, i.order || 0), -1);
+      const newItem: PortfolioItem = { ...item, id, order: maxOrder + 1 };
       await setDoc(doc(db, 'portfolio', id.toString()), newItem);
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, 'portfolio');
@@ -165,16 +176,40 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   const updateItem = async (id: number, updatedItem: Partial<PortfolioItem>) => {
     try {
-      await updateDoc(doc(db, 'portfolio', id.toString()), updatedItem);
+      const existing = portfolio.find(item => item.id === id) || INITIAL_PORTFOLIO.find(item => item.id === id);
+      if (!existing) throw new Error('Existing portfolio item not found for update');
+      const fullItem = { ...existing, ...updatedItem };
+      fullItem.id = id;
+      await setDoc(doc(db, 'portfolio', id.toString()), fullItem);
     } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, 'portfolio');
+      handleFirestoreError(error, OperationType.UPDATE, `portfolio/${id}`);
     }
   };
 
-  const addService = async (service: Omit<Service, 'id'>) => {
+  const reorderPortfolio = async (items: PortfolioItem[]) => {
+    try {
+      await Promise.all(items.map((item, idx) => {
+        const fullItem = { ...item, order: idx };
+        return setDoc(doc(db, 'portfolio', item.id.toString()), fullItem);
+      }));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'portfolio/reorder');
+    }
+  };
+
+  const addService = async (service: Omit<Service, 'id' | 'order'>) => {
     try {
       const id = `service-${Date.now()}`;
-      const newService = { ...service, id };
+      const maxOrder = services.reduce((max, s) => Math.max(max, s.order || 0), -1);
+      const newService: Service = { 
+        id,
+        title: service.title || '새 서비스',
+        description: service.description || '',
+        icon: service.icon || 'Star',
+        imageUrl: service.imageUrl || 'https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&q=80',
+        features: service.features || [],
+        order: maxOrder + 1
+      };
       await setDoc(doc(db, 'services', id), newService);
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, 'services');
@@ -191,19 +226,39 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   const updateService = async (id: string, updatedService: Partial<Service>) => {
     try {
-      await updateDoc(doc(db, 'services', id), updatedService);
+      const existing = services.find(s => s.id === id) || INITIAL_SERVICES.find(s => s.id === id);
+      if (!existing) throw new Error('Existing service not found for update');
+      const fullService = { ...existing, ...updatedService };
+      fullService.id = id;
+      await setDoc(doc(db, 'services', id), fullService);
     } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, 'services');
+      handleFirestoreError(error, OperationType.UPDATE, `services/${id}`);
     }
   };
 
-  const addNews = async (newsData: Omit<Post, 'id' | 'createdAt'>) => {
+  const reorderServices = async (items: Service[]) => {
+    try {
+      await Promise.all(items.map((item, idx) => {
+        const fullItem = { ...item, order: idx };
+        return setDoc(doc(db, 'services', item.id), fullItem);
+      }));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'services/reorder');
+    }
+  };
+
+  const addNews = async (newsData: Omit<Post, 'id' | 'createdAt' | 'order'>) => {
     try {
       const id = `post-${Date.now()}`;
+      const maxOrder = news.reduce((max, n) => Math.max(max, n.order || 0), -1);
       const newPost: Post = {
-        ...newsData,
+        title: newsData.title || '새 글',
+        content: newsData.content || '',
+        category: newsData.category || '공지사항',
+        imageUrl: newsData.imageUrl || '',
         id,
-        createdAt: Date.now()
+        createdAt: Date.now(),
+        order: maxOrder + 1
       };
       await setDoc(doc(db, 'news', id), newPost);
     } catch (error) {
@@ -221,9 +276,24 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   const updateNews = async (id: string, updatedNews: Partial<Post>) => {
     try {
-      await updateDoc(doc(db, 'news', id), updatedNews);
+      const existing = news.find(n => n.id === id) || INITIAL_NEWS.find(n => n.id === id);
+      if (!existing) throw new Error('Existing post not found for update');
+      const fullPost = { ...existing, ...updatedNews };
+      fullPost.id = id;
+      await setDoc(doc(db, 'news', id), fullPost);
     } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, 'news');
+      handleFirestoreError(error, OperationType.UPDATE, `news/${id}`);
+    }
+  };
+
+  const reorderNews = async (items: Post[]) => {
+    try {
+      await Promise.all(items.map((item, idx) => {
+        const fullItem = { ...item, order: idx };
+        return setDoc(doc(db, 'news', item.id), fullItem);
+      }));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'news/reorder');
     }
   };
 
@@ -235,14 +305,17 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       addItem, 
       removeItem, 
       updateItem,
+      reorderPortfolio,
       services,
       addService,
       removeService,
       updateService,
+      reorderServices,
       news,
       addNews,
       removeNews,
       updateNews,
+      reorderNews,
       isLoaded
     }}>
       {children}

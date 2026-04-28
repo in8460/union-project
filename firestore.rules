@@ -13,9 +13,8 @@ service cloud.firestore {
 
     function isAdmin() {
       return isSignedIn() && 
-             request.auth.token.email == 'in8460@hanmail.net';
-             // Removed strict email_verified check temporarily to debug provider issues, 
-             // but keeping email check secure.
+             (request.auth.token.email == 'in8460@hanmail.net' || 
+              request.auth.uid == 'iq9RRINd9rPLe5k9nwVC1YWYgTw1');
     }
 
     function isValidId(id) {
@@ -32,47 +31,49 @@ service cloud.firestore {
 
     // Validation Blueprints
     function isValidSettings(data) {
-      let requiredKeys = ['siteName', 'description', 'primaryColor', 'phoneNumber', 'email', 'address', 'heroBadge', 'heroTitle1', 'heroTitle2', 'heroDescription', 'heroImageUrl'];
-      return data.keys().hasAll(requiredKeys) &&
+      return data.keys().hasAll(['siteName', 'description', 'primaryColor', 'phoneNumber', 'email', 'address', 'heroBadge', 'heroTitle1', 'heroTitle2', 'heroDescription', 'heroImageUrl']) &&
              data.siteName is string && data.siteName.size() <= 200 &&
-             data.description is string && data.description.size() <= 2000 &&
+             data.description is string && data.description.size() <= 1000 &&
              data.primaryColor is string && data.primaryColor.size() <= 30 &&
              data.phoneNumber is string && data.phoneNumber.size() <= 100 &&
              data.email is string && data.email.size() <= 150 &&
              data.address is string && data.address.size() <= 500 &&
-             data.heroBadge is string && data.heroBadge.size() <= 300 &&
+             data.heroBadge is string && data.heroBadge.size() <= 200 &&
              data.heroTitle1 is string && data.heroTitle1.size() <= 300 &&
              data.heroTitle2 is string && data.heroTitle2.size() <= 300 &&
-             data.heroDescription is string && data.heroDescription.size() <= 3000 &&
+             data.heroDescription is string && data.heroDescription.size() <= 2000 &&
              data.heroImageUrl is string && data.heroImageUrl.size() <= 2000000;
     }
-
+ 
     function isValidService(data) {
-      return data.keys().hasAll(['id', 'title', 'description', 'icon', 'imageUrl', 'features']) &&
+      return data.keys().hasAll(['id', 'title', 'description', 'icon', 'imageUrl', 'features', 'order']) &&
              data.id is string && data.id.size() <= 150 &&
              data.title is string && data.title.size() <= 200 &&
-             data.description is string && data.description.size() <= 2000 &&
+             data.description is string && data.description.size() <= 3000 &&
              data.icon is string && data.icon.size() <= 100 &&
              data.imageUrl is string && data.imageUrl.size() <= 2000000 &&
-             data.features is list && data.features.size() <= 50;
+             data.features is list && data.features.size() <= 50 &&
+             data.order is number;
     }
-
+ 
     function isValidPost(data) {
-      return data.keys().hasAll(['id', 'title', 'content', 'category', 'createdAt']) &&
+      return data.keys().hasAll(['id', 'title', 'content', 'category', 'createdAt', 'order']) &&
              data.id is string && data.id.size() <= 150 &&
              data.title is string && data.title.size() <= 300 &&
              data.content is string && data.content.size() <= 20000 &&
              data.category in ['공지사항', '뉴스', '포트폴리오'] &&
              data.createdAt is number &&
+             data.order is number &&
              (!data.keys().hasAny(['imageUrl']) || (data.imageUrl is string && data.imageUrl.size() <= 2000000));
     }
-
+ 
     function isValidPortfolioItem(data) {
-      return data.keys().hasAll(['id', 'title', 'category', 'image']) &&
+      return data.keys().hasAll(['id', 'title', 'category', 'image', 'order']) &&
              data.id is number &&
              data.title is string && data.title.size() <= 300 &&
              data.category is string && data.category.size() <= 200 &&
-             data.image is string && data.image.size() <= 2000000;
+             data.image is string && data.image.size() <= 2000000 &&
+             data.order is number;
     }
 
     // Collection Rules
@@ -85,19 +86,19 @@ service cloud.firestore {
     match /services/{serviceId} {
       allow read: if true;
       allow create, update: if isAdmin() && isValidId(serviceId) && isValidService(incoming());
-      allow delete: if isAdmin() && isValidId(serviceId);
+      allow delete: if isAdmin();
     }
 
     match /news/{postId} {
       allow read: if true;
       allow create, update: if isAdmin() && isValidId(postId) && isValidPost(incoming());
-      allow delete: if isAdmin() && isValidId(postId);
+      allow delete: if isAdmin();
     }
 
     match /portfolio/{portfolioId} {
       allow read: if true;
       allow create, update: if isAdmin() && isValidId(portfolioId) && isValidPortfolioItem(incoming());
-      allow delete: if isAdmin() && isValidId(portfolioId);
+      allow delete: if isAdmin();
     }
   }
 }
