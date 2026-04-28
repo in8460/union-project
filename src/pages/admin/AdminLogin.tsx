@@ -6,13 +6,15 @@ import { useNavigate } from 'react-router-dom';
 export function AdminLogin() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
   const navigate = useNavigate();
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    // Temporary bypass until Firebase is configured
-    if (email && password) {
+    if (email === 'in8460@hanmail.net' && password === 'in980314!!') {
       navigate('/admin/dashboard');
+    } else {
+      setError('이메일 주소 또는 비밀번호가 일치하지 않습니다.');
     }
   };
 
@@ -34,6 +36,11 @@ export function AdminLogin() {
         </div>
 
         <form className="space-y-6" onSubmit={handleLogin}>
+          {error && (
+            <div className="bg-red-500/10 border border-red-500/20 text-red-500 text-xs py-3 px-4 rounded-lg text-center">
+              {error}
+            </div>
+          )}
           <div className="space-y-2">
             <label className="text-xs font-bold text-white/40 uppercase tracking-widest flex items-center gap-2">
               <Mail size={12} /> 이메일 주소

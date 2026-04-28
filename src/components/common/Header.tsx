@@ -2,8 +2,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Menu, X, ShieldCheck, Lightbulb } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { cn } from '@/src/lib/utils';
-import { useTheme } from '@/src/context/ThemeContext';
+import { cn } from '../../lib/utils';
+import { useTheme } from '../../context/ThemeContext';
 
 export function Header() {
   const { settings } = useTheme();

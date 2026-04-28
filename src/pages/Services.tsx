@@ -1,7 +1,7 @@
 import { motion } from 'motion/react';
 import { Calendar, Tv, Users, CheckCircle2, ChevronRight, Star } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
-import { useTheme } from '@/src/context/ThemeContext';
+import { useTheme } from '../context/ThemeContext';
 
 export function Services() {
   const { services } = useTheme();
@@ -22,7 +22,7 @@ export function Services() {
             animate={{ opacity: 1, y: 0 }}
             className="text-4xl md:text-5xl font-bold mb-6"
           >
-            Our Services
+            서비스 안내
           </motion.h1>
           <p className="text-white/50 max-w-2xl mx-auto text-lg leading-relaxed">
             유니온기획&스튜디오는 전문적인 기획력과 최신 방송 장비, 
@@ -63,12 +63,7 @@ export function Services() {
                   {service.description}
                 </p>
                 <ul className="space-y-4">
-                  {[
-                    '업계 전문가의 맞춤형 컨설팅',
-                    '최첨단 하드웨어 인프라 지원',
-                    '철저한 리스크 관리 및 현장 운영',
-                    '성과 분석 및 사후 관리 리포트'
-                  ].map((item, i) => (
+                  {service.features?.map((item, i) => (
                     <li key={i} className="flex items-center gap-3 text-white/40">
                       <CheckCircle2 size={20} className="text-navy-light" />
                       <span>{item}</span>
@@ -85,15 +80,15 @@ export function Services() {
       <section className="py-32 bg-white/5 border-y border-white/5 px-6">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
-            <h2 className="text-3xl font-bold mb-4">Project Process</h2>
+            <h2 className="text-3xl font-bold mb-4">프로젝트 진행 방식</h2>
             <p className="text-white/40">우리는 체계적인 단계를 거쳐 성공적인 결과를 도출합니다.</p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
             {[
-              { step: '01', title: 'Consultation', desc: '고객 요구 분석 및 목표 설정' },
-              { step: '02', title: 'Planning', desc: '세부 실행 계획 및 콘텐츠 기획' },
-              { step: '03', title: 'Execution', desc: '현장 운영 및 성공적인 진행' },
-              { step: '04', title: 'Feedback', desc: '성과 측정 및 파트너십 강화' }
+              { step: '01', title: '상담 및 분석', desc: '고객 요구 분석 및 목표 설정' },
+              { step: '02', title: '기획 및 전략', desc: '세부 실행 계획 및 콘텐츠 기획' },
+              { step: '03', title: '현장 실행', desc: '현장 운영 및 성공적인 진행' },
+              { step: '04', title: '결과 리포트', desc: '성과 측정 및 파트너십 강화' }
             ].map((p, i) => (
               <div key={i} className="relative p-8 glass-card">
                 <div className="text-5xl font-bold text-white/5 mb-6">{p.step}</div>

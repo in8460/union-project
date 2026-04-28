@@ -17,7 +17,7 @@ export function Portfolio() {
                 animate={{ opacity: 1 }}
                 className="text-navy-light font-bold tracking-widest text-sm uppercase"
               >
-                OUR WORK
+                포트폴리오
               </motion.span>
               <motion.h1 
                 initial={{ opacity: 0, y: 10 }}

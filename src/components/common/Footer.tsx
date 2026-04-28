@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { Instagram, Youtube, Facebook, Mail, Phone, MapPin, Lightbulb } from 'lucide-react';
-import { useTheme } from '@/src/context/ThemeContext';
+import { useTheme } from '../../context/ThemeContext';
 
 export function Footer() {
   const { settings } = useTheme();

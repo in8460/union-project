@@ -3,7 +3,7 @@ import { ArrowRight, Calendar, Tv, Users, Play, Star } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import * as LucideIcons from 'lucide-react';
 
-import { useTheme } from '@/src/context/ThemeContext';
+import { useTheme } from '../context/ThemeContext';
 
 export function Home() {
   const { settings, services } = useTheme();
@@ -75,7 +75,7 @@ export function Home() {
       <section className="py-32 px-6">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-20">
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">Our Specialty</h2>
+            <h2 className="text-3xl md:text-4xl font-bold mb-4">주요 서비스</h2>
             <div className="w-20 h-1 bg-navy-primary mx-auto mb-6" />
             <p className="text-white/50 max-w-lg mx-auto">
               유니온기획&스튜디오가 제공하는 핵심 서비스 모델입니다.

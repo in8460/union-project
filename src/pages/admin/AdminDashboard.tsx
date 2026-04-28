@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, ChangeEvent, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { 
   Settings, 
@@ -11,10 +11,12 @@ import {
   Edit3, 
   Trash2,
   Palette,
-  ExternalLink
+  ExternalLink,
+  Database
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { useTheme } from '@/src/context/ThemeContext';
+import { useTheme } from '../../context/ThemeContext';
+import { compressImage, getLocalStorageSize } from '../../lib/imageUtils';
 
 export function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<'settings' | 'news' | 'portfolio' | 'services' | 'home'>('settings');
@@ -28,9 +30,93 @@ export function AdminDashboard() {
     services,
     addService,
     removeService,
-    updateService
+    updateService,
+    news,
+    addNews,
+    removeNews,
+    updateNews
   } = useTheme();
+  const [saveMessage, setSaveMessage] = useState('');
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (saveMessage) {
+      const timer = setTimeout(() => setSaveMessage(''), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [saveMessage]);
+
+  const [isUploading, setIsUploading] = useState(false);
+  const [storageUsage, setStorageUsage] = useState<{ used: number, total: number }>({ used: 0, total: 50 * 1024 }); // Default 50MB estimate
+
+  useEffect(() => {
+    const updateEstimate = async () => {
+      if (navigator.storage && navigator.storage.estimate) {
+        const estimate = await navigator.storage.estimate();
+        setStorageUsage({
+          used: (estimate.usage || 0) / 1024, // KB
+          total: (estimate.quota || 50 * 1024 * 1024) / 1024 // KB
+        });
+      } else {
+        // Fallback or just show localStorage size as a hint of "data size"
+        setStorageUsage({
+          used: Number(getLocalStorageSize()),
+          total: 50 * 1024 // 50MB fallback
+        });
+      }
+    };
+    updateEstimate();
+  }, [portfolio, services, settings, news]);
+
+  const handleImageUpload = (e: ChangeEvent<HTMLInputElement>, callback: (url: string) => void) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setIsUploading(true);
+      const reader = new FileReader();
+      
+      reader.onloadend = async () => {
+        if (reader.result) {
+          try {
+            // Compress image to 1200px max and 70% quality
+            const compressed = await compressImage(reader.result as string, 1200, 1200, 0.7);
+            callback(compressed);
+            setSaveMessage('이미지가 압축되어 성공적으로 교체되었습니다.');
+          } catch (error) {
+            console.error('Compression failed:', error);
+            callback(reader.result as string); // Fallback to original
+          } finally {
+            setIsUploading(false);
+          }
+        }
+      };
+      
+      reader.onerror = () => {
+        alert('이미지를 읽는 중 오류가 발생했습니다.');
+        setIsUploading(false);
+      };
+      
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const [isAddingProject, setIsAddingProject] = useState(false);
+  const [newProjectTitle, setNewProjectTitle] = useState('');
+  const [newProjectCategory, setNewProjectCategory] = useState('행사기획');
+
+  const handleAddProject = () => {
+    if (!newProjectTitle.trim()) {
+      alert('프로젝트 제목을 입력해주세요.');
+      return;
+    }
+    addItem({
+      title: newProjectTitle,
+      category: newProjectCategory,
+      image: 'https://images.unsplash.com/photo-1540575861501-7ad0582371f3?auto=format&fit=crop&q=80'
+    });
+    setNewProjectTitle('');
+    setIsAddingProject(false);
+    setSaveMessage('새 프로젝트가 추가되었습니다.');
+  };
 
   return (
     <div className="min-h-screen bg-navy-dark/30 flex">
@@ -63,6 +149,18 @@ export function AdminDashboard() {
         </nav>
 
         <div className="p-4 border-t border-white/10">
+          <div className="px-4 py-3 mb-2">
+            <div className="flex justify-between items-center text-[10px] text-white/40 mb-1">
+              <span className="flex items-center gap-1"><Database size={10} /> 저장소 사용량 (IndexedDB)</span>
+              <span>{(storageUsage.used / 1024).toFixed(1)}MB / {(storageUsage.total / 1024).toFixed(0)}MB</span>
+            </div>
+            <div className="w-full bg-white/5 h-1 rounded-full overflow-hidden">
+              <div 
+                className={`h-full transition-all duration-500 ${(storageUsage.used / storageUsage.total) > 0.8 ? 'bg-red-500' : 'bg-navy-light'}`}
+                style={{ width: `${Math.min((storageUsage.used / storageUsage.total) * 100, 100)}%` }}
+              ></div>
+            </div>
+          </div>
           <button 
             onClick={() => navigate('/')}
             className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-white/40 hover:bg-white/5 hover:text-white transition-all"
@@ -93,9 +191,22 @@ export function AdminDashboard() {
             </h1>
             <p className="text-white/40 text-sm">웹사이트의 전반적인 콘텐츠와 디자인을 관리합니다.</p>
           </div>
-          <button className="px-6 py-3 bg-white text-black font-bold rounded-xl flex items-center gap-2 hover:bg-navy-light hover:text-white transition-all">
-            <Save size={18} /> 변경사항 저장하기
-          </button>
+          {saveMessage ? (
+            <motion.div 
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              className="px-6 py-3 bg-navy-light text-white font-bold rounded-xl flex items-center gap-2"
+            >
+              <Save size={18} /> {saveMessage}
+            </motion.div>
+          ) : (
+            <button 
+              onClick={() => setSaveMessage('모든 변경사항이 저장되었습니다.')}
+              className="px-6 py-3 bg-white text-black font-bold rounded-xl flex items-center gap-2 hover:bg-navy-light hover:text-white transition-all shadow-lg shadow-black/20"
+            >
+              <Save size={18} /> 변경사항 저장하기
+            </button>
+          )}
         </header>
 
         {activeTab === 'settings' && (
@@ -170,13 +281,25 @@ export function AdminDashboard() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-xs font-bold text-white/40 tracking-wider">배경 이미지 URL</label>
-                  <input 
-                    type="text" 
-                    value={settings.heroImageUrl}
-                    onChange={(e) => updateSettings({ heroImageUrl: e.target.value })}
-                    className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:border-navy-light focus:outline-none" 
-                  />
+                  <label className="text-xs font-bold text-white/40 tracking-wider">배경 이미지 (파일 첨부)</label>
+                  <div className="flex items-center gap-4">
+                    <div className="w-16 h-10 rounded bg-white/5 overflow-hidden border border-white/10">
+                      <img src={settings.heroImageUrl} className="w-full h-full object-cover" />
+                    </div>
+                    <label className={`flex-grow cursor-pointer group ${isUploading ? 'opacity-50 pointer-events-none' : ''}`}>
+                      <div className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 text-xs text-white/40 group-hover:border-navy-light group-hover:text-white transition-all flex items-center gap-2">
+                        <ImageIcon size={14} className={isUploading ? 'animate-pulse' : ''} /> 
+                        {isUploading ? '이미지 처리 중...' : '이미지 선택...'}
+                      </div>
+                      <input 
+                        type="file" 
+                        accept="image/*"
+                        className="hidden"
+                        disabled={isUploading}
+                        onChange={(e) => handleImageUpload(e, (url) => updateSettings({ heroImageUrl: url }))}
+                      />
+                    </label>
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <label className="text-xs font-bold text-white/40 tracking-wider">메인 타이틀 1</label>
@@ -220,7 +343,8 @@ export function AdminDashboard() {
                     title, 
                     description: '서비스 설명을 입력해주세요.', 
                     icon: 'Star', 
-                    imageUrl: 'https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&q=80' 
+                    imageUrl: 'https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&q=80',
+                    features: ['상세 항목을 추가하세요']
                   });
                 }}
                 className="px-5 py-3 bg-navy-primary text-white text-sm font-bold rounded-xl flex items-center gap-2 hover:bg-navy-light transition-all"
@@ -264,14 +388,58 @@ export function AdminDashboard() {
                         className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-3 text-sm focus:border-navy-light focus:outline-none h-20 resize-none" 
                       />
                     </div>
+                    <div className="space-y-4">
+                      <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest leading-none">상세 항목 (Features)</label>
+                      <div className="space-y-2">
+                        {service.features?.map((feature, fIndex) => (
+                          <div key={fIndex} className="flex gap-2">
+                            <input 
+                              type="text" 
+                              value={feature}
+                              onChange={(e) => {
+                                const newFeatures = [...(service.features || [])];
+                                newFeatures[fIndex] = e.target.value;
+                                updateService(service.id, { features: newFeatures });
+                              }}
+                              className="flex-grow bg-white/5 border border-white/10 rounded-lg py-2 px-3 text-sm focus:border-navy-light focus:outline-none" 
+                            />
+                            <button 
+                              onClick={() => {
+                                const newFeatures = (service.features || []).filter((_, i) => i !== fIndex);
+                                updateService(service.id, { features: newFeatures });
+                              }}
+                              className="p-2 text-red-500 hover:bg-red-500/10 rounded-lg transition-colors border border-white/5"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        ))}
+                        <button 
+                          onClick={() => {
+                            const newFeatures = [...(service.features || []), '새로운 항목'];
+                            updateService(service.id, { features: newFeatures });
+                          }}
+                          className="w-full py-2 bg-white/5 border border-dashed border-white/20 rounded-lg text-xs text-white/40 hover:text-white hover:border-navy-light transition-all flex items-center justify-center gap-2"
+                        >
+                          <Plus size={14} /> 항목 추가
+                        </button>
+                      </div>
+                    </div>
                     <div className="space-y-2">
-                      <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest leading-none">이미지 URL</label>
-                      <input 
-                        type="text" 
-                        value={service.imageUrl}
-                        onChange={(e) => updateService(service.id, { imageUrl: e.target.value })}
-                        className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-3 text-sm focus:border-navy-light focus:outline-none" 
-                      />
+                      <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest leading-none">서비스 이미지 (파일 첨부)</label>
+                      <label className={`block cursor-pointer group ${isUploading ? 'opacity-50 pointer-events-none' : ''}`}>
+                        <div className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-3 text-xs text-white/40 group-hover:border-navy-light group-hover:text-white transition-all flex items-center gap-2">
+                          <ImageIcon size={14} className={isUploading ? 'animate-pulse' : ''} /> 
+                          {isUploading ? '이미지 처리 중...' : '이미지 교체하기...'}
+                        </div>
+                        <input 
+                          type="file" 
+                          accept="image/*"
+                          className="hidden"
+                          disabled={isUploading}
+                          onChange={(e) => handleImageUpload(e, (url) => updateService(service.id, { imageUrl: url }))}
+                        />
+                      </label>
                     </div>
                   </div>
                   <div className="flex lg:flex-col justify-end gap-2">
@@ -293,7 +461,17 @@ export function AdminDashboard() {
         {activeTab === 'news' && (
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
             <div className="flex justify-end mb-6">
-              <button className="px-5 py-3 bg-navy-primary text-white text-sm font-bold rounded-xl flex items-center gap-2">
+              <button 
+                onClick={() => {
+                  const title = prompt('제목을 입력하세요:');
+                  if (title) addNews({ 
+                    title, 
+                    content: '내용을 입력하세요.', 
+                    category: '공지사항' 
+                  });
+                }}
+                className="px-5 py-3 bg-navy-primary text-white text-sm font-bold rounded-xl flex items-center gap-2 hover:bg-navy-light transition-all"
+              >
                 <Plus size={18} /> 새 글 작성하기
               </button>
             </div>
@@ -308,22 +486,50 @@ export function AdminDashboard() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
-                  {[
-                    { id: 1, title: '웹사이트 리뉴얼 안내', date: '2024.04.28', cat: '공지' },
-                    { id: 2, title: '2024 공채 공고', date: '2024.04.15', cat: '뉴스' },
-                  ].map(post => (
+                  {news.map(post => (
                     <tr key={post.id} className="hover:bg-white/5 transition-colors">
-                      <td className="px-6 py-4"><span className="text-xs px-2 py-1 bg-navy-primary/20 text-navy-light rounded font-bold">{post.cat}</span></td>
-                      <td className="px-6 py-4 font-medium">{post.title}</td>
-                      <td className="px-6 py-4 text-sm text-white/40">{post.date}</td>
+                      <td className="px-6 py-4">
+                        <select
+                          value={post.category}
+                          onChange={(e) => updateNews(post.id, { category: e.target.value as any })}
+                          className="text-xs px-2 py-1 bg-navy-primary/20 text-navy-light rounded font-bold border-none focus:outline-none appearance-none cursor-pointer"
+                        >
+                          <option value="공지사항">공지사항</option>
+                          <option value="뉴스">뉴스</option>
+                        </select>
+                      </td>
+                      <td className="px-6 py-4 font-medium">
+                        <input 
+                          type="text"
+                          value={post.title}
+                          onChange={(e) => updateNews(post.id, { title: e.target.value })}
+                          className="bg-transparent border-none focus:outline-none w-full"
+                        />
+                      </td>
+                      <td className="px-6 py-4 text-sm text-white/40">
+                        {new Date(post.createdAt).toLocaleDateString()}
+                      </td>
                       <td className="px-6 py-4 text-right">
                         <div className="inline-flex gap-2">
-                          <button className="p-2 hover:bg-navy-primary rounded-lg transition-colors"><Edit3 size={16} /></button>
-                          <button className="p-2 hover:bg-red-500 rounded-lg transition-colors"><Trash2 size={16} /></button>
+                          <button 
+                            onClick={() => {
+                               if (confirm('정말로 삭제하시겠습니까?')) removeNews(post.id);
+                            }}
+                            className="p-2 hover:bg-red-500 rounded-lg transition-colors text-red-500 hover:text-white"
+                          >
+                            <Trash2 size={16} />
+                          </button>
                         </div>
                       </td>
                     </tr>
                   ))}
+                  {news.length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="px-6 py-12 text-center text-white/20 italic">
+                        작성된 공지사항이 없습니다.
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -331,46 +537,129 @@ export function AdminDashboard() {
         )}
 
         {activeTab === 'portfolio' && (
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-            <div className="flex justify-end mb-6">
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-bold flex items-center gap-2">
+                <Layout size={24} className="text-navy-light" /> 프로젝트 목록
+              </h2>
               <button 
-                onClick={() => {
-                  const title = prompt('제목을 입력하세요:');
-                  if (title) addItem({ title, category: '행사기획', image: 'https://images.unsplash.com/photo-1540575861501-7ad0582371f3?auto=format&fit=crop&q=80' });
-                }}
-                className="px-5 py-3 bg-navy-primary text-white text-sm font-bold rounded-xl flex items-center gap-2 hover:bg-navy-light transition-all"
+                onClick={() => setIsAddingProject(!isAddingProject)}
+                className={`px-5 py-3 rounded-xl flex items-center gap-2 font-bold transition-all ${
+                  isAddingProject 
+                    ? 'bg-white/10 text-white border border-white/20' 
+                    : 'bg-navy-primary text-white hover:bg-navy-light shadow-lg'
+                }`}
               >
-                <Plus size={18} /> 프로젝트 추가하기
+                {isAddingProject ? '취소하기' : <><Plus size={18} /> 프로젝트 추가하기</>}
               </button>
             </div>
+
+            {isAddingProject && (
+              <motion.div 
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                className="glass-card p-8 border-navy-light/30 border-2"
+              >
+                <h3 className="text-lg font-bold mb-6 flex items-center gap-2">
+                  <Plus size={20} className="text-navy-light" /> 새 프로젝트 정보 입력
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-white/40 tracking-wider">프로젝트 제목</label>
+                    <input 
+                      type="text" 
+                      value={newProjectTitle}
+                      onChange={(e) => setNewProjectTitle(e.target.value)}
+                      placeholder="프로젝트 명칭을 입력하세요"
+                      className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:border-navy-light focus:outline-none" 
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-white/40 tracking-wider">카테고리</label>
+                    <select 
+                      value={newProjectCategory}
+                      onChange={(e) => setNewProjectCategory(e.target.value)}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:border-navy-light focus:outline-none"
+                    >
+                      <option value="행사기획">행사기획</option>
+                      <option value="행사대행">행사대행</option>
+                      <option value="방송기획">방송기획</option>
+                      <option value="기타">기타</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="flex justify-end gap-3">
+                  <button 
+                    onClick={() => setIsAddingProject(false)}
+                    className="px-6 py-2 rounded-xl text-sm font-bold text-white/40 hover:text-white transition-all"
+                  >
+                    취소
+                  </button>
+                  <button 
+                    onClick={handleAddProject}
+                    className="px-8 py-2 bg-navy-primary text-white rounded-xl text-sm font-bold hover:bg-navy-light transition-all shadow-lg"
+                  >
+                    추가 완료
+                  </button>
+                </div>
+              </motion.div>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {portfolio.map((item) => (
-                <div key={item.id} className="glass-card overflow-hidden group">
-                  <div className="aspect-video relative">
-                    <img src={item.image} alt={item.title} className="w-full h-full object-cover" />
-                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-4">
-                      <button 
-                        onClick={() => {
-                          const newTitle = prompt('새 제목:', item.title);
-                          if (newTitle) updateItem(item.id, { title: newTitle });
-                        }}
-                        className="p-3 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-full text-white transition-all"
-                      >
-                        <Edit3 size={20} />
-                      </button>
-                      <button 
-                        onClick={() => {
-                          if (confirm('정말로 삭제하시겠습니까?')) removeItem(item.id);
-                        }}
-                        className="p-3 bg-red-500/20 hover:bg-red-500/40 backdrop-blur-md rounded-full text-red-500 transition-all"
-                      >
-                        <Trash2 size={20} />
-                      </button>
+                <div key={item.id} className="glass-card overflow-hidden flex flex-col">
+                  <div className="aspect-video relative overflow-hidden group">
+                    <img src={item.image} alt={item.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <ImageIcon size={32} className="text-white/20" />
                     </div>
                   </div>
-                  <div className="p-6">
-                    <div className="text-xs font-bold text-navy-light mb-2 uppercase tracking-widest">{item.category}</div>
-                    <h3 className="font-bold text-lg leading-tight">{item.title}</h3>
+                  <div className="p-6 space-y-4 flex-grow">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest">카테고리</label>
+                      <input 
+                        type="text" 
+                        value={item.category}
+                        onChange={(e) => updateItem(item.id, { category: e.target.value })}
+                        className="w-full bg-white/5 border border-white/10 rounded-lg py-1.5 px-3 text-xs focus:border-navy-light focus:outline-none" 
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest">제목</label>
+                      <input 
+                        type="text" 
+                        value={item.title}
+                        onChange={(e) => updateItem(item.id, { title: e.target.value })}
+                        className="w-full bg-white/5 border border-white/10 rounded-lg py-1.5 px-3 text-sm focus:border-navy-light focus:outline-none font-bold" 
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest">이미지 (파일 첨부)</label>
+                      <label className={`block cursor-pointer group ${isUploading ? 'opacity-50 pointer-events-none' : ''}`}>
+                        <div className="w-full bg-white/5 border border-white/10 rounded-lg py-1.5 px-3 text-[10px] text-white/40 group-hover:border-navy-light group-hover:text-white transition-all flex items-center gap-2">
+                          <ImageIcon size={12} className={isUploading ? 'animate-pulse' : ''} /> 
+                          {isUploading ? '이미지 처리 중...' : '이미지 교체하기...'}
+                        </div>
+                        <input 
+                          type="file" 
+                          accept="image/*"
+                          className="hidden"
+                          disabled={isUploading}
+                          onChange={(e) => handleImageUpload(e, (url) => updateItem(item.id, { image: url }))}
+                        />
+                      </label>
+                    </div>
+                  </div>
+                  <div className="px-6 py-4 border-t border-white/5 flex justify-end">
+                    <button 
+                      onClick={() => {
+                        if (confirm('정말로 이 프로젝트를 삭제하시겠습니까?')) removeItem(item.id);
+                      }}
+                      className="p-2 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500 hover:text-white transition-all"
+                      title="삭제"
+                    >
+                      <Trash2 size={16} />
+                    </button>
                   </div>
                 </div>
               ))}

@@ -1,15 +1,17 @@
 import { motion } from 'motion/react';
 import { Search, Calendar, ChevronRight, Bell } from 'lucide-react';
-
-const newsItems = [
-  { id: 1, title: '유니온기획&스튜디오 웹사이트 리뉴얼 안내', date: '2024.04.28', category: '공지사항', important: true },
-  { id: 2, title: '2024년 하반기 방송 인턴 및 경력사원 채용 공고', date: '2024.04.15', category: '뉴스', important: false },
-  { id: 3, title: '[보도자료] 글로벌 스타트업 페어 기획 대행사로 유니온 선정', date: '2024.04.10', category: '뉴스', important: false },
-  { id: 4, title: '개인정보처리방침 개정 안내 (2024년 5월부터)', date: '2024.03.25', category: '공지사항', important: false },
-  { id: 5, title: '스튜디오 촬영 설비 및 최신 방송 장비 업그레이드 완료', date: '2024.03.12', category: '뉴스', important: false },
-];
+import { useTheme } from '../context/ThemeContext';
+import { useState } from 'react';
 
 export function News() {
+  const { news } = useTheme();
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const filteredNews = news.filter(item => 
+    item.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    item.category.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   return (
     <div className="pt-24 min-h-screen">
       <section className="py-20 px-6">
@@ -30,12 +32,14 @@ export function News() {
             <input 
               type="text" 
               placeholder="검색어를 입력하세요..." 
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-6 text-white focus:border-navy-light focus:outline-none transition-colors"
             />
           </div>
 
           <div className="space-y-4">
-            {newsItems.map((item, index) => (
+            {filteredNews.map((item, index) => (
               <motion.div
                 key={item.id}
                 initial={{ opacity: 0, x: -20 }}
@@ -45,21 +49,26 @@ export function News() {
               >
                 <div className="flex flex-col gap-2">
                   <div className="flex items-center gap-3">
-                    <span className={`text-[10px] uppercase font-bold tracking-widest px-2 py-0.5 rounded ${item.important ? 'bg-red-500/20 text-red-500' : 'bg-navy-light/20 text-navy-light'}`}>
+                    <span className={`text-[10px] uppercase font-bold tracking-widest px-2 py-0.5 rounded ${item.category === '공지사항' ? 'bg-navy-light/20 text-navy-light' : 'bg-white/10 text-white/60'}`}>
                       {item.category}
                     </span>
                     <span className="flex items-center gap-1 text-xs text-white/30 font-medium tracking-tight">
-                      <Calendar size={12} /> {item.date}
+                      <Calendar size={12} /> {new Date(item.createdAt).toLocaleDateString()}
                     </span>
                   </div>
-                  <h3 className={`text-lg font-semibold ${item.important ? 'text-white' : 'text-white/80'} group-hover:text-navy-light transition-colors`}>
-                    {item.important && <Bell size={16} className="inline mr-2 text-red-500" />}
+                  <h3 className="text-lg font-semibold text-white/80 group-hover:text-navy-light transition-colors">
                     {item.title}
                   </h3>
                 </div>
                 <ChevronRight size={24} className="text-white/10 group-hover:text-white transition-all transform group-hover:translate-x-2" />
               </motion.div>
             ))}
+            
+            {filteredNews.length === 0 && (
+              <div className="text-center py-20 text-white/20 italic">
+                검색 결과가 없습니다.
+              </div>
+            )}
           </div>
 
           <div className="mt-12 flex justify-center gap-2">
