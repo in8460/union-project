@@ -16,7 +16,8 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
-import { compressImage, getLocalStorageSize } from '../../lib/imageUtils';
+import { auth } from '../../lib/firebase';
+import { compressImage } from '../../lib/imageUtils';
 
 export function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<'settings' | 'news' | 'portfolio' | 'services' | 'home'>('settings');
@@ -34,10 +35,21 @@ export function AdminDashboard() {
     news,
     addNews,
     removeNews,
-    updateNews
+    updateNews,
+    isLoaded
   } = useTheme();
   const [saveMessage, setSaveMessage] = useState('');
   const navigate = useNavigate();
+
+  // Auth check
+  useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged((user) => {
+      if (!user) {
+        navigate('/admin');
+      }
+    });
+    return () => unsubscribe();
+  }, [navigate]);
 
   useEffect(() => {
     if (saveMessage) {
@@ -47,7 +59,7 @@ export function AdminDashboard() {
   }, [saveMessage]);
 
   const [isUploading, setIsUploading] = useState(false);
-  const [storageUsage, setStorageUsage] = useState<{ used: number, total: number }>({ used: 0, total: 50 * 1024 }); // Default 50MB estimate
+  const [storageUsage, setStorageUsage] = useState<{ used: number, total: number }>({ used: 0, total: 1024 * 1024 }); // 1GB limit for display
 
   useEffect(() => {
     const updateEstimate = async () => {
@@ -55,13 +67,7 @@ export function AdminDashboard() {
         const estimate = await navigator.storage.estimate();
         setStorageUsage({
           used: (estimate.usage || 0) / 1024, // KB
-          total: (estimate.quota || 50 * 1024 * 1024) / 1024 // KB
-        });
-      } else {
-        // Fallback or just show localStorage size as a hint of "data size"
-        setStorageUsage({
-          used: Number(getLocalStorageSize()),
-          total: 50 * 1024 // 50MB fallback
+          total: (estimate.quota || 1024 * 1024 * 1024) / 1024 // KB
         });
       }
     };
@@ -149,9 +155,18 @@ export function AdminDashboard() {
         </nav>
 
         <div className="p-4 border-t border-white/10">
+          <div className="px-4 py-3 mb-2 flex items-center gap-3">
+            <div className="w-8 h-8 rounded-full overflow-hidden border border-white/10">
+               <img src={auth.currentUser?.photoURL || `https://ui-avatars.com/api/?name=${auth.currentUser?.email || 'A'}&background=random`} className="w-full h-full object-cover" />
+            </div>
+            <div className="flex-grow overflow-hidden">
+              <p className="text-[10px] font-bold text-white truncate">{auth.currentUser?.email}</p>
+              <p className="text-[8px] text-white/40 uppercase tracking-widest">Administrator</p>
+            </div>
+          </div>
           <div className="px-4 py-3 mb-2">
             <div className="flex justify-between items-center text-[10px] text-white/40 mb-1">
-              <span className="flex items-center gap-1"><Database size={10} /> 저장소 사용량 (IndexedDB)</span>
+              <span className="flex items-center gap-1"><Database size={10} /> 저장소 사용량 (Firebase)</span>
               <span>{(storageUsage.used / 1024).toFixed(1)}MB / {(storageUsage.total / 1024).toFixed(0)}MB</span>
             </div>
             <div className="w-full bg-white/5 h-1 rounded-full overflow-hidden">
@@ -169,7 +184,10 @@ export function AdminDashboard() {
             사이트 바로가기
           </button>
           <button 
-            onClick={() => navigate('/admin')}
+            onClick={() => {
+              auth.signOut();
+              navigate('/admin');
+            }}
             className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-red-500/60 hover:bg-red-500/10 hover:text-red-500 transition-all mt-2"
           >
             <LogOut size={18} />

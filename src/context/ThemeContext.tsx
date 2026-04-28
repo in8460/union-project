@@ -1,5 +1,16 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import localforage from 'localforage';
+import { 
+  onSnapshot, 
+  doc, 
+  setDoc, 
+  collection, 
+  deleteDoc, 
+  getDocFromServer,
+  arrayUnion,
+  updateDoc
+} from 'firebase/firestore';
+import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { SiteSettings, INITIAL_SETTINGS, PortfolioItem, INITIAL_PORTFOLIO, Service, INITIAL_SERVICES, Post, INITIAL_NEWS } from '../types';
 
 // Configure localforage
@@ -35,150 +46,182 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [services, setServices] = useState<Service[]>(INITIAL_SERVICES);
   const [news, setNews] = useState<Post[]>(INITIAL_NEWS);
 
-  // Initial load from localforage (with localStorage migration)
+  // Validate Connection to Firestore
   useEffect(() => {
-    const initData = async () => {
-      // Safety timeout: 2 seconds max for storage access
-      const timeoutPromise = new Promise(resolve => setTimeout(resolve, 2000));
-      
+    async function testConnection() {
       try {
-        const loadPromise = (async () => {
-          // Attempt to load from IndexedDB
-          const savedSettings = await localforage.getItem<SiteSettings>('union_settings');
-          const savedPortfolio = await localforage.getItem<PortfolioItem[]>('union_portfolio');
-          const savedServices = await localforage.getItem<Service[]>('union_services');
-          const savedNews = await localforage.getItem<Post[]>('union_news');
-
-          // Migration logic: If nothing in IndexedDB, try localStorage
-          if (!savedSettings && typeof window !== 'undefined') {
-            const lsSettings = localStorage.getItem('union_settings');
-            if (lsSettings) {
-              const data = JSON.parse(lsSettings);
-              setSettings(data);
-              await localforage.setItem('union_settings', data);
-            }
-          } else if (savedSettings) {
-            setSettings(savedSettings);
-          }
-
-          if (!savedPortfolio && typeof window !== 'undefined') {
-            const lsPortfolio = localStorage.getItem('union_portfolio');
-            if (lsPortfolio) {
-              const data = JSON.parse(lsPortfolio);
-              setPortfolio(data);
-              await localforage.setItem('union_portfolio', data);
-            }
-          } else if (savedPortfolio) {
-            setPortfolio(savedPortfolio);
-          }
-
-          if (!savedServices && typeof window !== 'undefined') {
-            const lsServices = localStorage.getItem('union_services');
-            if (lsServices) {
-              const data = JSON.parse(lsServices) as Service[];
-              const migrated = data.map(s => ({ ...s, features: s.features || [] }));
-              setServices(migrated);
-              await localforage.setItem('union_services', migrated);
-            }
-          } else if (savedServices) {
-            setServices(savedServices.map(s => ({ ...s, features: s.features || [] })));
-          }
-
-          if (!savedNews && typeof window !== 'undefined') {
-            const lsNews = localStorage.getItem('union_news');
-            if (lsNews) {
-              const data = JSON.parse(lsNews);
-              setNews(data);
-              await localforage.setItem('union_news', data);
-            }
-          } else if (savedNews) {
-            setNews(savedNews);
-          }
-        })();
-
-        // Race between loading and timeout
-        await Promise.race([loadPromise, timeoutPromise]);
-      } catch (err) {
-        console.error('Failed to load data from storage:', err);
-      } finally {
-        setIsLoaded(true);
+        await getDocFromServer(doc(db, 'siteConfig', 'settings'));
+      } catch (error) {
+        if(error instanceof Error && error.message.includes('the client is offline')) {
+          console.error("Please check your Firebase configuration.");
+        }
       }
-    };
-
-    initData();
+    }
+    testConnection();
   }, []);
 
-  // Sync to Shared Storage whenever state changes
+  // Sync Site Settings
   useEffect(() => {
-    if (isLoaded) {
-      localforage.setItem('union_settings', settings);
-      document.documentElement.style.setProperty('--primary-color', settings.primaryColor);
-    }
-  }, [settings, isLoaded]);
+    const unsubscribe = onSnapshot(doc(db, 'siteConfig', 'settings'), (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data() as SiteSettings;
+        setSettings(data);
+        localforage.setItem('union_settings', data);
+        document.documentElement.style.setProperty('--primary-color', data.primaryColor);
+      } else {
+        // First time initialization
+        setDoc(doc(db, 'siteConfig', 'settings'), INITIAL_SETTINGS);
+      }
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'siteConfig/settings');
+    });
 
-  useEffect(() => {
-    if (isLoaded) {
-      localforage.setItem('union_portfolio', portfolio);
-    }
-  }, [portfolio, isLoaded]);
+    return () => unsubscribe();
+  }, []);
 
+  // Sync Portfolio
   useEffect(() => {
-    if (isLoaded) {
-      localforage.setItem('union_services', services);
-    }
-  }, [services, isLoaded]);
+    const unsubscribe = onSnapshot(collection(db, 'portfolio'), (snapshot) => {
+      const items: PortfolioItem[] = [];
+      snapshot.forEach((doc) => {
+        items.push(doc.data() as PortfolioItem);
+      });
+      // Sort by ID (timestamp) or some other logic if needed. 
+      // Existing code uses Date.now() as ID.
+      const sortedItems = items.sort((a, b) => b.id - a.id);
+      setPortfolio(sortedItems.length > 0 ? sortedItems : INITIAL_PORTFOLIO);
+      localforage.setItem('union_portfolio', sortedItems);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'portfolio');
+    });
 
+    return () => unsubscribe();
+  }, []);
+
+  // Sync Services
   useEffect(() => {
-    if (isLoaded) {
-      localforage.setItem('union_news', news);
-    }
-  }, [news, isLoaded]);
+    const unsubscribe = onSnapshot(collection(db, 'services'), (snapshot) => {
+      const items: Service[] = [];
+      snapshot.forEach((doc) => {
+        items.push(doc.data() as Service);
+      });
+      setServices(items.length > 0 ? items : INITIAL_SERVICES);
+      localforage.setItem('union_services', items);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'services');
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  // Sync News
+  useEffect(() => {
+    const unsubscribe = onSnapshot(collection(db, 'news'), (snapshot) => {
+      const items: Post[] = [];
+      snapshot.forEach((doc) => {
+        items.push(doc.data() as Post);
+      });
+      const sortedItems = items.sort((a, b) => b.createdAt - a.createdAt);
+      setNews(sortedItems.length > 0 ? sortedItems : INITIAL_NEWS);
+      localforage.setItem('union_news', sortedItems);
+      // Mark as loaded when news (usually last) is fetched
+      setIsLoaded(true);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'news');
+    });
+
+    return () => unsubscribe();
+  }, []);
   
-  const updateSettings = (newSettings: Partial<SiteSettings>) => {
-    setSettings(prev => ({ ...prev, ...newSettings }));
+  const updateSettings = async (newSettings: Partial<SiteSettings>) => {
+    try {
+      const updated = { ...settings, ...newSettings };
+      await setDoc(doc(db, 'siteConfig', 'settings'), updated);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'siteConfig/settings');
+    }
   };
 
-  const addItem = (item: Omit<PortfolioItem, 'id'>) => {
-    const newItem = { ...item, id: Date.now() };
-    setPortfolio(prev => [...prev, newItem]);
+  const addItem = async (item: Omit<PortfolioItem, 'id'>) => {
+    try {
+      const id = Date.now();
+      const newItem = { ...item, id };
+      await setDoc(doc(db, 'portfolio', id.toString()), newItem);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, 'portfolio');
+    }
   };
 
-  const removeItem = (id: number) => {
-    setPortfolio(prev => prev.filter(item => item.id !== id));
+  const removeItem = async (id: number) => {
+    try {
+      await deleteDoc(doc(db, 'portfolio', id.toString()));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, 'portfolio');
+    }
   };
 
-  const updateItem = (id: number, updatedItem: Partial<PortfolioItem>) => {
-    setPortfolio(prev => prev.map(item => item.id === id ? { ...item, ...updatedItem } : item));
+  const updateItem = async (id: number, updatedItem: Partial<PortfolioItem>) => {
+    try {
+      await updateDoc(doc(db, 'portfolio', id.toString()), updatedItem);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'portfolio');
+    }
   };
 
-  const addService = (service: Omit<Service, 'id'>) => {
-    const newService = { ...service, id: `service-${Date.now()}` };
-    setServices(prev => [...prev, newService]);
+  const addService = async (service: Omit<Service, 'id'>) => {
+    try {
+      const id = `service-${Date.now()}`;
+      const newService = { ...service, id };
+      await setDoc(doc(db, 'services', id), newService);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, 'services');
+    }
   };
 
-  const removeService = (id: string) => {
-    setServices(prev => prev.filter(s => s.id !== id));
+  const removeService = async (id: string) => {
+    try {
+      await deleteDoc(doc(db, 'services', id));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, 'services');
+    }
   };
 
-  const updateService = (id: string, updatedService: Partial<Service>) => {
-    setServices(prev => prev.map(s => s.id === id ? { ...s, ...updatedService } : s));
+  const updateService = async (id: string, updatedService: Partial<Service>) => {
+    try {
+      await updateDoc(doc(db, 'services', id), updatedService);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'services');
+    }
   };
 
-  const addNews = (newsData: Omit<Post, 'id' | 'createdAt'>) => {
-    const newPost: Post = {
-      ...newsData,
-      id: `post-${Date.now()}`,
-      createdAt: Date.now()
-    };
-    setNews(prev => [newPost, ...prev]);
+  const addNews = async (newsData: Omit<Post, 'id' | 'createdAt'>) => {
+    try {
+      const id = `post-${Date.now()}`;
+      const newPost: Post = {
+        ...newsData,
+        id,
+        createdAt: Date.now()
+      };
+      await setDoc(doc(db, 'news', id), newPost);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, 'news');
+    }
   };
 
-  const removeNews = (id: string) => {
-    setNews(prev => prev.filter(n => n.id !== id));
+  const removeNews = async (id: string) => {
+    try {
+      await deleteDoc(doc(db, 'news', id));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, 'news');
+    }
   };
 
-  const updateNews = (id: string, updatedNews: Partial<Post>) => {
-    setNews(prev => prev.map(n => n.id === id ? { ...n, ...updatedNews } : n));
+  const updateNews = async (id: string, updatedNews: Partial<Post>) => {
+    try {
+      await updateDoc(doc(db, 'news', id), updatedNews);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'news');
+    }
   };
 
   return (

@@ -2,19 +2,54 @@ import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { Lock, Mail, ChevronRight, ShieldCheck } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { 
+  signInWithEmailAndPassword, 
+  signInWithPopup, 
+  GoogleAuthProvider 
+} from 'firebase/auth';
+import { auth } from '../../lib/firebase';
 
 export function AdminLogin() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (email === 'in8460@hanmail.net' && password === 'in980314!!') {
+    setIsLoading(true);
+    setError('');
+    
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
       navigate('/admin/dashboard');
-    } else {
-      setError('이메일 주소 또는 비밀번호가 일치하지 않습니다.');
+    } catch (err: any) {
+      console.error('Login error:', err);
+      if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
+        setError('이메일 주소 또는 비밀번호가 일치하지 않습니다.');
+      } else if (err.code === 'auth/network-request-failed') {
+        setError('네트워크 연결이 불안정합니다.');
+      } else {
+        setError('로그인 중 오류가 발생했습니다. (Firebase 설정 확인 필요)');
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    setIsLoading(true);
+    setError('');
+    try {
+      const provider = new GoogleAuthProvider();
+      await signInWithPopup(auth, provider);
+      navigate('/admin/dashboard');
+    } catch (err: any) {
+      console.error('Google login error:', err);
+      setError('구글 로그인 중 오류가 발생했습니다.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -50,7 +85,8 @@ export function AdminLogin() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full bg-white/5 border border-white/10 rounded-xl py-4 px-6 focus:border-navy-light focus:outline-none transition-colors"
+              disabled={isLoading}
+              className="w-full bg-white/5 border border-white/10 rounded-xl py-4 px-6 focus:border-navy-light focus:outline-none transition-colors disabled:opacity-50"
               placeholder="admin@union-studio.kr"
             />
           </div>
@@ -63,18 +99,35 @@ export function AdminLogin() {
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full bg-white/5 border border-white/10 rounded-xl py-4 px-6 focus:border-navy-light focus:outline-none transition-colors"
+              disabled={isLoading}
+              className="w-full bg-white/5 border border-white/10 rounded-xl py-4 px-6 focus:border-navy-light focus:outline-none transition-colors disabled:opacity-50"
               placeholder="••••••••"
             />
           </div>
           
           <button 
             type="submit"
-            className="w-full py-4 bg-navy-primary text-white font-bold rounded-xl hover:bg-navy-light transition-all flex items-center justify-center gap-2 group"
+            disabled={isLoading}
+            className="w-full py-4 bg-navy-primary text-white font-bold rounded-xl hover:bg-navy-light transition-all flex items-center justify-center gap-2 group disabled:opacity-50"
           >
-            로그인하기 <ChevronRight size={18} className="group-hover:translate-x-1 transition-transform" />
+            {isLoading ? '로그인 중...' : <>로그인하기 <ChevronRight size={18} className="group-hover:translate-x-1 transition-transform" /></>}
           </button>
         </form>
+
+        <div className="mt-6 flex items-center gap-4 text-white/20">
+          <div className="flex-1 h-[1px] bg-white/10" />
+          <span className="text-[10px] uppercase tracking-widest">or</span>
+          <div className="flex-1 h-[1px] bg-white/10" />
+        </div>
+
+        <button 
+          onClick={handleGoogleLogin}
+          disabled={isLoading}
+          className="w-full mt-6 py-4 bg-white/5 border border-white/10 text-white font-bold rounded-xl hover:bg-white/10 transition-all flex items-center justify-center gap-3 disabled:opacity-50"
+        >
+          <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-5 h-5" />
+          구글 계정으로 로그인
+        </button>
 
         <div className="mt-10 pt-8 border-t border-white/5 text-center">
           <button 

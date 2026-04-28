@@ -1,0 +1,99 @@
+{
+  "entities": {
+    "siteSettings": {
+      "title": "Site Settings",
+      "description": "Global configuration for the union agency website",
+      "type": "object",
+      "properties": {
+        "siteName": { "type": "string" },
+        "description": { "type": "string" },
+        "primaryColor": { "type": "string" },
+        "phoneNumber": { "type": "string" },
+        "email": { "type": "string" },
+        "address": { "type": "string" },
+        "instagramUrl": { "type": "string" },
+        "facebookUrl": { "type": "string" },
+        "youtubeUrl": { "type": "string" },
+        "heroBadge": { "type": "string" },
+        "heroTitle1": { "type": "string" },
+        "heroTitle2": { "type": "string" },
+        "heroDescription": { "type": "string" },
+        "heroImageUrl": { "type": "string" }
+      },
+      "required": [
+        "siteName",
+        "description",
+        "primaryColor",
+        "phoneNumber",
+        "email",
+        "address",
+        "heroBadge",
+        "heroTitle1",
+        "heroTitle2",
+        "heroDescription",
+        "heroImageUrl"
+      ]
+    },
+    "service": {
+      "title": "Service",
+      "description": "A service offered by the agency",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "icon": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "features": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "required": ["id", "title", "description", "icon", "imageUrl", "features"]
+    },
+    "post": {
+      "title": "Post",
+      "description": "A news or notice post",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "content": { "type": "string" },
+        "category": { "type": "string", "enum": ["공지사항", "뉴스", "포트폴리오"] },
+        "imageUrl": { "type": "string" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "title", "content", "category", "createdAt"]
+    },
+    "portfolioItem": {
+      "title": "Portfolio Item",
+      "description": "An item in the portfolio gallery",
+      "type": "object",
+      "properties": {
+        "id": { "type": "number" },
+        "title": { "type": "string" },
+        "category": { "type": "string" },
+        "image": { "type": "string" }
+      },
+      "required": ["id", "title", "category", "image"]
+    }
+  },
+  "firestore": {
+    "siteConfig/settings": {
+      "schema": "siteSettings",
+      "description": "Single document for global site settings"
+    },
+    "services/{serviceId}": {
+      "schema": "service",
+      "description": "Collection of agency services"
+    },
+    "news/{postId}": {
+      "schema": "post",
+      "description": "Collection of news and notices"
+    },
+    "portfolio/{portfolioId}": {
+      "schema": "portfolioItem",
+      "description": "Collection of portfolio items"
+    }
+  }
+}

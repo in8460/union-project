@@ -1,0 +1,104 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Global helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && 
+             request.auth.token.email == 'in8460@hanmail.net' && 
+             request.auth.token.email_verified == true;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Validation Blueprints
+    function isValidSettings(data) {
+      return data.keys().hasAll(['siteName', 'description', 'primaryColor', 'phoneNumber', 'email', 'address', 'heroBadge', 'heroTitle1', 'heroTitle2', 'heroDescription', 'heroImageUrl']) &&
+             data.keys().size() >= 11 &&
+             data.siteName is string && data.siteName.size() <= 100 &&
+             data.description is string && data.description.size() <= 500 &&
+             data.primaryColor is string && data.primaryColor.size() <= 20 &&
+             data.phoneNumber is string && data.phoneNumber.size() <= 30 &&
+             data.email is string && data.email.size() <= 100 &&
+             data.address is string && data.address.size() <= 200 &&
+             data.heroBadge is string && data.heroBadge.size() <= 100 &&
+             data.heroTitle1 is string && data.heroTitle1.size() <= 100 &&
+             data.heroTitle2 is string && data.heroTitle2.size() <= 100 &&
+             data.heroDescription is string && data.heroDescription.size() <= 500 &&
+             data.heroImageUrl is string && data.heroImageUrl.size() <= 1000;
+    }
+
+    function isValidService(data) {
+      return data.keys().hasAll(['id', 'title', 'description', 'icon', 'imageUrl', 'features']) &&
+             data.keys().size() == 6 &&
+             data.id is string && data.id.size() <= 100 &&
+             data.title is string && data.title.size() <= 100 &&
+             data.description is string && data.description.size() <= 1000 &&
+             data.icon is string && data.icon.size() <= 50 &&
+             data.imageUrl is string && data.imageUrl.size() <= 1000 &&
+             data.features is list && data.features.size() <= 20;
+    }
+
+    function isValidPost(data) {
+      return data.keys().hasAll(['id', 'title', 'content', 'category', 'createdAt']) &&
+             data.keys().size() >= 5 && data.keys().size() <= 6 &&
+             data.id is string && data.id.size() <= 100 &&
+             data.title is string && data.title.size() <= 200 &&
+             data.content is string && data.content.size() <= 10000 &&
+             data.category in ['공지사항', '뉴스', '포트폴리오'] &&
+             data.createdAt is number;
+    }
+
+    function isValidPortfolioItem(data) {
+      return data.keys().hasAll(['id', 'title', 'category', 'image']) &&
+             data.keys().size() == 4 &&
+             data.id is number &&
+             data.title is string && data.title.size() <= 200 &&
+             data.category is string && data.category.size() <= 100 &&
+             data.image is string && data.image.size() <= 1000;
+    }
+
+    // Collection Rules
+    match /siteConfig/settings {
+      allow read: if true;
+      allow create, update: if isAdmin() && isValidSettings(incoming());
+      allow delete: if isAdmin();
+    }
+
+    match /services/{serviceId} {
+      allow read: if true;
+      allow create, update: if isAdmin() && isValidId(serviceId) && isValidService(incoming());
+      allow delete: if isAdmin() && isValidId(serviceId);
+    }
+
+    match /news/{postId} {
+      allow read: if true;
+      allow create, update: if isAdmin() && isValidId(postId) && isValidPost(incoming());
+      allow delete: if isAdmin() && isValidId(postId);
+    }
+
+    match /portfolio/{portfolioId} {
+      allow read: if true;
+      allow create, update: if isAdmin() && isValidId(portfolioId) && isValidPortfolioItem(incoming());
+      allow delete: if isAdmin() && isValidId(portfolioId);
+    }
+  }
+}
