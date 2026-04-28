@@ -196,6 +196,7 @@ export function AdminDashboard() {
   const [newServiceDesc, setNewServiceDesc] = useState('');
 
   const [isAddingNews, setIsAddingNews] = useState(false);
+  const [editingNews, setEditingNews] = useState<typeof news[0] | null>(null);
   const [newNewsTitle, setNewNewsTitle] = useState('');
   const [newNewsCategory, setNewNewsCategory] = useState<'공지사항' | '뉴스' | '포트폴리오'>('공지사항');
 
@@ -817,6 +818,119 @@ export function AdminDashboard() {
               </motion.div>
             )}
 
+            {editingNews && (
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/80 backdrop-blur-sm"
+              >
+                <div className="glass-card w-full max-w-4xl max-h-[90vh] overflow-y-auto p-8 border-navy-light/30 border-2 shadow-2xl relative">
+                  <button 
+                    onClick={() => setEditingNews(null)}
+                    className="absolute top-6 right-6 text-white/40 hover:text-white transition-all"
+                  >
+                    닫기
+                  </button>
+                  
+                  <h3 className="text-2xl font-bold mb-8 flex items-center gap-3">
+                    <Edit3 size={24} className="text-navy-light" /> 게시물 수정하기
+                  </h3>
+                  
+                  <div className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-white/40 tracking-wider">제목</label>
+                        <input 
+                          type="text" 
+                          value={editingNews.title}
+                          onChange={(e) => setEditingNews({ ...editingNews, title: e.target.value })}
+                          className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:border-navy-light focus:outline-none" 
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-white/40 tracking-wider">카테고리</label>
+                        <select 
+                          value={editingNews.category}
+                          onChange={(e) => setEditingNews({ ...editingNews, category: e.target.value as any })}
+                          className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:border-navy-light focus:outline-none"
+                        >
+                          <option value="공지사항">공지사항</option>
+                          <option value="뉴스">뉴스</option>
+                          <option value="포트폴리오">포트폴리오</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-white/40 tracking-wider">상세 내용</label>
+                      <textarea 
+                        value={editingNews.content}
+                        onChange={(e) => setEditingNews({ ...editingNews, content: e.target.value })}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:border-navy-light focus:outline-none h-64 resize-none leading-relaxed"
+                        placeholder="공지사항 내용을 입력하세요..."
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-white/40 tracking-wider">대표 이미지 (선택)</label>
+                      <div className="flex items-center gap-4">
+                        {editingNews.imageUrl && (
+                          <div className="w-24 h-16 rounded overflow-hidden border border-white/10 shrink-0">
+                            <img src={editingNews.imageUrl} alt="preview" className="w-full h-full object-cover" />
+                          </div>
+                        )}
+                        <label className={`flex-grow cursor-pointer group ${isUploading ? 'opacity-50 pointer-events-none' : ''}`}>
+                          <div className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 text-xs text-white/40 group-hover:border-navy-light group-hover:text-white transition-all flex items-center gap-2">
+                            <ImageIcon size={14} className={isUploading ? 'animate-pulse' : ''} /> 
+                            {isUploading ? '이미지 처리 중...' : '이미지 교체/추가...'}
+                          </div>
+                          <input 
+                            type="file" 
+                            accept="image/*"
+                            className="hidden"
+                            disabled={isUploading}
+                            onChange={(e) => handleImageUpload(e, (url) => {
+                              setEditingNews({ ...editingNews, imageUrl: url });
+                            })}
+                          />
+                        </label>
+                        {editingNews.imageUrl && (
+                          <button 
+                            onClick={() => setEditingNews({ ...editingNews, imageUrl: undefined })}
+                            className="p-3 text-red-500 hover:bg-red-500/10 rounded-xl border border-white/5"
+                            title="이미지 제거"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end gap-3 pt-6 border-t border-white/5">
+                      <button 
+                        onClick={() => setEditingNews(null)}
+                        className="px-8 py-3 rounded-xl text-sm font-bold text-white/40 hover:text-white transition-all"
+                      >
+                        취소
+                      </button>
+                      <button 
+                        onClick={async () => {
+                          if (editingNews) {
+                            await updateNews(editingNews.id, editingNews);
+                            setEditingNews(null);
+                            setSaveMessage('게시물이 수정되었습니다.');
+                          }
+                        }}
+                        className="px-10 py-3 bg-navy-primary text-white rounded-xl text-sm font-bold hover:bg-navy-light transition-all shadow-lg flex items-center gap-2"
+                      >
+                        <Save size={18} /> 수정 내용 저장
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
             <div className="glass-card overflow-hidden">
               <table className="w-full text-left">
                 <thead className="bg-white/5 border-b border-white/10">
@@ -882,6 +996,13 @@ export function AdminDashboard() {
                       </td>
                       <td className="px-6 py-4 text-right">
                         <div className="inline-flex gap-2">
+                          <button 
+                            onClick={() => setEditingNews(post)}
+                            className="p-2 hover:bg-navy-light rounded-lg transition-colors text-navy-light hover:text-white"
+                            title="내용 수정"
+                          >
+                            <Edit3 size={16} />
+                          </button>
                           <button 
                             onClick={() => {
                                if (confirm('정말로 삭제하시겠습니까?')) removeNews(post.id);

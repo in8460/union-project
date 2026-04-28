@@ -6,11 +6,75 @@ import { useState } from 'react';
 export function News() {
   const { news } = useTheme();
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedPost, setSelectedPost] = useState<typeof news[0] | null>(null);
 
   const filteredNews = news.filter(item => 
     item.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
     item.category.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  if (selectedPost) {
+    return (
+      <div className="pt-24 min-h-screen">
+        <section className="py-20 px-6">
+          <div className="max-w-4xl mx-auto">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="glass-card overflow-hidden"
+            >
+              {selectedPost.imageUrl && (
+                <div className="aspect-video w-full overflow-hidden">
+                  <img 
+                    src={selectedPost.imageUrl} 
+                    alt={selectedPost.title} 
+                    className="w-full h-full object-cover"
+                    referrerPolicy="no-referrer"
+                  />
+                </div>
+              )}
+              <div className="p-8 md:p-12">
+                <div className="flex flex-wrap items-center gap-4 mb-8">
+                  <button 
+                    onClick={() => setSelectedPost(null)}
+                    className="text-navy-light text-sm font-bold flex items-center gap-1 hover:underline"
+                  >
+                    ← 목록으로 돌아가기
+                  </button>
+                  <span className={`text-[10px] uppercase font-bold tracking-widest px-2 py-0.5 rounded ${selectedPost.category === '공지사항' ? 'bg-navy-light/20 text-navy-light' : 'bg-white/10 text-white/60'}`}>
+                    {selectedPost.category}
+                  </span>
+                  <span className="flex items-center gap-1 text-xs text-white/30 font-medium tracking-tight">
+                    <Calendar size={12} /> {new Date(selectedPost.createdAt).toLocaleDateString()}
+                  </span>
+                </div>
+
+                <h1 className="text-3xl md:text-4xl font-bold mb-8 leading-tight text-white">
+                  {selectedPost.title}
+                </h1>
+
+                <div className="prose prose-invert max-w-none">
+                  <div className="text-white/70 leading-relaxed whitespace-pre-wrap text-lg">
+                    {selectedPost.content}
+                  </div>
+                </div>
+
+                <div className="mt-12 pt-8 border-t border-white/5 flex justify-between items-center text-sm text-white/20">
+                  <span>유니온기획&스튜디오</span>
+                  <button 
+                    onClick={() => setSelectedPost(null)}
+                    className="px-6 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/60 transition-all font-bold"
+                  >
+                    닫기
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        </section>
+      </div>
+    );
+  }
 
   return (
     <div className="pt-24 min-h-screen">
@@ -46,6 +110,7 @@ export function News() {
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: index * 0.05 }}
                 className="group glass-card p-6 cursor-pointer hover:bg-white/10 transition-all flex items-center justify-between"
+                onClick={() => setSelectedPost(item)}
               >
                 <div className="flex flex-col gap-2">
                   <div className="flex items-center gap-3">
