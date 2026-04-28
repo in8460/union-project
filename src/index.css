@@ -1,0 +1,23 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", "Noto Sans KR", ui-sans-serif, system-ui, sans-serif;
+  --color-navy-primary: var(--primary-color, #001F3F);
+  --color-navy-light: #003366;
+  --color-navy-dark: #000c1a;
+}
+
+@layer base {
+  body {
+    @apply bg-black text-white font-sans antialiased;
+  }
+}
+
+.glass-card {
+  @apply bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl;
+}
+
+.text-gradient {
+  @apply bg-clip-text text-transparent bg-gradient-to-r from-white via-white to-navy-light;
+}
