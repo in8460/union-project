@@ -11,6 +11,7 @@ import {
   Edit3, 
   Trash2,
   Palette,
+  Sparkles,
   ExternalLink,
   Database,
   ChevronUp,
@@ -20,6 +21,656 @@ import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
 import { auth } from '../../lib/firebase';
 import { compressImage } from '../../lib/imageUtils';
+
+// Tab Components for better performance and IME stability
+function ServicesTab({ 
+  services, 
+  addService, 
+  removeService, 
+  updateService,
+  handleMoveService,
+  handleImageUpload,
+  isUploading 
+}: any) {
+  const [isAddingService, setIsAddingService] = useState(false);
+  const [newServiceTitle, setNewServiceTitle] = useState('');
+  const [newServiceDesc, setNewServiceDesc] = useState('');
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-xl font-bold flex items-center gap-2">
+          <Layout size={24} className="text-navy-light" /> 서비스 목록
+        </h2>
+        <button 
+          onClick={() => setIsAddingService(!isAddingService)}
+          className={`px-5 py-3 rounded-xl flex items-center gap-2 font-bold transition-all ${
+            isAddingService 
+              ? 'bg-white/10 text-white border border-white/20' 
+              : 'bg-navy-primary text-white hover:bg-navy-light shadow-lg'
+          }`}
+        >
+          {isAddingService ? '취소하기' : <><Plus size={18} /> 새 서비스 추가</>}
+        </button>
+      </div>
+
+      {isAddingService && (
+        <motion.div 
+          initial={{ opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: 'auto' }}
+          className="glass-card p-8 border-navy-light/30 border-2"
+        >
+          <h3 className="text-lg font-bold mb-6 flex items-center gap-2">
+            <Plus size={20} className="text-navy-light" /> 새 서비스 정보 입력
+          </h3>
+          <div className="space-y-4 mb-6">
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-white/40 tracking-wider">서비스 명칭</label>
+              <input 
+                type="text" 
+                value={newServiceTitle}
+                onChange={(e) => setNewServiceTitle(e.target.value)}
+                placeholder="서비스 제목을 입력하세요"
+                className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:border-navy-light focus:outline-none" 
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-white/40 tracking-wider">서비스 설명</label>
+              <textarea 
+                value={newServiceDesc}
+                onChange={(e) => setNewServiceDesc(e.target.value)}
+                placeholder="서비스에 대한 간략한 설명을 입력하세요"
+                className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:border-navy-light focus:outline-none h-24 resize-none" 
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-3">
+            <button onClick={() => setIsAddingService(false)} className="px-6 py-2 rounded-xl text-sm font-bold text-white/40 hover:text-white transition-all">취소</button>
+            <button 
+              onClick={() => {
+                if (!newServiceTitle.trim()) return;
+                addService({ title: newServiceTitle, description: newServiceDesc || '서비스 설명을 입력하세요.', icon: 'Star', imageUrl: 'https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&q=80', features: ['상세 항목을 추가하세요'] });
+                setNewServiceTitle('');
+                setNewServiceDesc('');
+                setIsAddingService(false);
+              }}
+              className="px-8 py-2 bg-navy-primary text-white rounded-xl text-sm font-bold hover:bg-navy-light transition-all shadow-lg"
+            >
+              추가 완료
+            </button>
+          </div>
+        </motion.div>
+      )}
+
+      <div className="grid grid-cols-1 gap-6">
+        {services.map((service: any, index: number) => (
+          <ServiceItemCard 
+            key={`service-${service.id}`} 
+            service={service} 
+            index={index} 
+            total={services.length}
+            updateService={updateService}
+            removeService={removeService}
+            handleMoveService={handleMoveService}
+            handleImageUpload={handleImageUpload}
+            isUploading={isUploading}
+          />
+        ))}
+      </div>
+    </motion.div>
+  );
+}
+
+function ServiceItemCard({ service, index, total, updateService, removeService, handleMoveService, handleImageUpload, isUploading }: any) {
+  const [localTitle, setLocalTitle] = useState(service.title);
+  const [localDesc, setLocalDesc] = useState(service.description);
+  const [localIcon, setLocalIcon] = useState(service.icon);
+  const [localFeatures, setLocalFeatures] = useState<string[]>(service.features || []);
+
+  useEffect(() => {
+    setLocalTitle(service.title);
+    setLocalDesc(service.description);
+    setLocalIcon(service.icon);
+    setLocalFeatures(service.features || []);
+  }, [service]);
+
+  const handleUpdateFeatures = (index: number, value: string) => {
+    const updated = [...localFeatures];
+    updated[index] = value;
+    setLocalFeatures(updated);
+  };
+
+  const handleAddFeature = () => {
+    const updated = [...localFeatures, ''];
+    setLocalFeatures(updated);
+    updateService(service.id, { features: updated });
+  };
+
+  const handleRemoveFeature = (index: number) => {
+    const updated = localFeatures.filter((_, i) => i !== index);
+    setLocalFeatures(updated);
+    updateService(service.id, { features: updated });
+  };
+
+  return (
+    <div className="glass-card p-8 flex flex-col lg:flex-row gap-8 relative transition-all duration-300">
+      <div className="absolute top-4 right-4 flex flex-col gap-2">
+        <button onClick={() => handleMoveService(index, 'up')} disabled={index === 0} className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/40 hover:text-white disabled:opacity-20 transition-all"><ChevronUp size={16} /></button>
+        <button onClick={() => handleMoveService(index, 'down')} disabled={index === total - 1} className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/40 hover:text-white disabled:opacity-20 transition-all"><ChevronDown size={16} /></button>
+      </div>
+      <div className="w-full lg:w-48 h-32 rounded-xl overflow-hidden shrink-0 border border-white/10 shadow-lg">
+        <img src={service.imageUrl} alt={service.title} className="w-full h-full object-cover" />
+      </div>
+      <div className="flex-grow space-y-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest leading-none">서비스 제목</label>
+            <input 
+              type="text" 
+              value={localTitle}
+              onChange={(e) => setLocalTitle(e.target.value)}
+              onBlur={() => updateService(service.id, { title: localTitle })}
+              className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-3 text-sm focus:border-navy-light focus:outline-none focus:ring-1 focus:ring-navy-light" 
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest leading-none">아이콘 (Lucide 아이콘 이름)</label>
+            <input 
+              type="text" 
+              value={localIcon}
+              onChange={(e) => setLocalIcon(e.target.value)}
+              onBlur={() => updateService(service.id, { icon: localIcon })}
+              className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-3 text-sm focus:border-navy-light focus:outline-none focus:ring-1 focus:ring-navy-light" 
+            />
+          </div>
+        </div>
+        <div className="space-y-2">
+          <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest leading-none">설명</label>
+          <textarea 
+            value={localDesc}
+            onChange={(e) => setLocalDesc(e.target.value)}
+            onBlur={() => updateService(service.id, { description: localDesc })}
+            className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-3 text-sm focus:border-navy-light focus:outline-none h-20 resize-none focus:ring-1 focus:ring-navy-light" 
+          />
+        </div>
+
+        <div className="space-y-3">
+          <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest leading-none">상세 항목 (Features)</label>
+          <div className="space-y-2">
+            {localFeatures.map((feature, fIndex) => (
+              <div key={`${service.id}-f-${fIndex}`} className="flex gap-2">
+                <input 
+                  type="text" 
+                  value={feature}
+                  onChange={(e) => handleUpdateFeatures(fIndex, e.target.value)}
+                  onBlur={() => updateService(service.id, { features: localFeatures })}
+                  placeholder="항목 내용을 입력하세요"
+                  className="flex-grow bg-white/5 border border-white/10 rounded-lg py-1.5 px-3 text-xs focus:border-navy-light focus:outline-none" 
+                />
+                <button 
+                  onClick={() => handleRemoveFeature(fIndex)}
+                  className="p-1.5 text-red-500 hover:bg-red-500/10 rounded-lg transition-colors border border-white/5"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            ))}
+            <button 
+              onClick={handleAddFeature}
+              className="w-full py-2 bg-white/5 border border-dashed border-white/20 rounded-lg text-[10px] text-white/40 hover:text-white hover:border-navy-light transition-all flex items-center justify-center gap-2"
+            >
+              <Plus size={12} /> 상세 항목 추가
+            </button>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest leading-none">서비스 이미지</label>
+          <label className={`block cursor-pointer group ${isUploading ? 'opacity-50 pointer-events-none' : ''}`}>
+            <div className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-3 text-xs text-white/40 group-hover:border-navy-light group-hover:text-white transition-all flex items-center gap-2">
+              <ImageIcon size={14} className={isUploading ? 'animate-pulse' : ''} /> 
+              {isUploading ? '이미지 처리 중...' : '이미지 교체하기...'}
+            </div>
+            <input type="file" accept="image/*" className="hidden" disabled={isUploading} onChange={(e) => handleImageUpload(e, (url: string) => updateService(service.id, { imageUrl: url }))} />
+          </label>
+        </div>
+      </div>
+      <div className="flex lg:flex-col justify-end gap-2">
+        <button onClick={() => { if (confirm('정말로 삭제하시겠습니까?')) removeService(service.id); }} className="p-3 bg-red-500/10 text-red-500 rounded-xl hover:bg-red-500 transition-all hover:text-white"><Trash2 size={20} /></button>
+      </div>
+    </div>
+  );
+}
+
+function NewsTab({ news, addNews, removeNews, updateNews, handleMoveNews, handleImageUpload, isUploading }: any) {
+  const [isAddingNews, setIsAddingNews] = useState(false);
+  const [newNewsTitle, setNewNewsTitle] = useState('');
+  const [newNewsCategory, setNewNewsCategory] = useState<'공지사항' | '뉴스' | '포트폴리오'>('공지사항');
+  const [editingNews, setEditingNews] = useState<any | null>(null);
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-xl font-bold flex items-center gap-2"><FileText size={24} className="text-navy-light" /> 게시물 목록</h2>
+        <button 
+          onClick={() => setIsAddingNews(!isAddingNews)}
+          className={`px-5 py-3 rounded-xl flex items-center gap-2 font-bold transition-all ${isAddingNews ? 'bg-white/10 text-white' : 'bg-navy-primary text-white shadow-lg shadow-navy-primary/20'}`}
+        >
+          {isAddingNews ? '취소' : <><Plus size={18} /> 새 글 작성</>}
+        </button>
+      </div>
+
+      {isAddingNews && (
+        <div className="glass-card p-8 border-navy-light/30 border-2 mb-8 space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-white/40 uppercase tracking-widest">제목</label>
+              <input 
+                type="text" 
+                value={newNewsTitle} 
+                onChange={(e) => setNewNewsTitle(e.target.value)} 
+                placeholder="제목을 입력하세요"
+                className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:border-navy-light focus:outline-none" 
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-white/40 uppercase tracking-widest">카테고리</label>
+              <select 
+                value={newNewsCategory} 
+                onChange={(e) => setNewNewsCategory(e.target.value as any)} 
+                className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:border-navy-light focus:outline-none appearance-none"
+              >
+                <option value="공지사항">공지사항</option>
+                <option value="뉴스">뉴스</option>
+                <option value="포트폴리오">포트폴리오</option>
+              </select>
+            </div>
+          </div>
+          <div className="flex justify-end gap-3">
+            <button 
+              onClick={() => {
+                if (!newNewsTitle.trim()) return alert('제목을 입력하세요');
+                addNews({ title: newNewsTitle, content: '내용을 입력하세요.', category: newNewsCategory, createdAt: Date.now() });
+                setNewNewsTitle('');
+                setIsAddingNews(false);
+              }} 
+              className="px-8 py-3 bg-navy-primary text-white rounded-xl font-bold hover:bg-navy-light transition-all"
+            >
+              작성 완료
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Editing Modal */}
+      {editingNews && (
+         <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/90 backdrop-blur-md">
+           <motion.div 
+             initial={{ opacity: 0, scale: 0.95 }}
+             animate={{ opacity: 1, scale: 1 }}
+             className="glass-card w-full max-w-4xl max-h-[90vh] overflow-y-auto p-10 relative border-navy-light/30 border"
+           >
+             <button onClick={() => setEditingNews(null)} className="absolute top-6 right-6 text-white/40 hover:text-white transition-colors">닫기</button>
+             <h3 className="text-2xl font-bold mb-10 flex items-center gap-3">
+               <Edit3 size={24} className="text-navy-light" /> 게시물 상세 내용 수정
+             </h3>
+             <div className="space-y-8">
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                 <div className="space-y-2">
+                   <label className="text-xs font-bold text-white/40 uppercase tracking-widest">제목</label>
+                   <input 
+                     type="text" 
+                     value={editingNews.title} 
+                     onChange={(e) => setEditingNews({...editingNews, title: e.target.value})} 
+                     className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:border-navy-light focus:outline-none" 
+                   />
+                 </div>
+                 <div className="space-y-2">
+                   <label className="text-xs font-bold text-white/40 uppercase tracking-widest">카테고리</label>
+                   <select 
+                     value={editingNews.category} 
+                     onChange={(e) => setEditingNews({...editingNews, category: e.target.value as any})} 
+                     className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:border-navy-light focus:outline-none"
+                   >
+                     <option value="공지사항">공지사항</option>
+                     <option value="뉴스">뉴스</option>
+                     <option value="포트폴리오">포트폴리오</option>
+                   </select>
+                 </div>
+               </div>
+               
+               <div className="space-y-2">
+                 <label className="text-xs font-bold text-white/40 uppercase tracking-widest">본문 내용</label>
+                 <textarea 
+                   value={editingNews.content} 
+                   onChange={(e) => setEditingNews({...editingNews, content: e.target.value})} 
+                   className="w-full bg-white/5 border border-white/10 rounded-xl py-4 px-4 h-80 resize-none focus:border-navy-light focus:outline-none leading-relaxed" 
+                 />
+               </div>
+
+               <div className="space-y-4">
+                  <label className="text-xs font-bold text-white/40 uppercase tracking-widest">대표 이미지</label>
+                  <div className="flex items-start gap-6">
+                    {editingNews.imageUrl && (
+                      <div className="w-32 h-20 rounded-lg overflow-hidden border border-white/10 shrink-0">
+                        <img src={editingNews.imageUrl} alt="preview" className="w-full h-full object-cover" />
+                      </div>
+                    )}
+                    <div className="flex-grow space-y-2">
+                      <label className={`block cursor-pointer group ${isUploading ? 'opacity-50 pointer-events-none' : ''}`}>
+                        <div className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 text-xs text-white/40 group-hover:border-navy-light group-hover:text-white transition-all flex items-center justify-center gap-2">
+                          <ImageIcon size={14} className={isUploading ? 'animate-pulse' : ''} /> 
+                          {isUploading ? '이미지 처리 중...' : '이미지 교체하기'}
+                        </div>
+                        <input type="file" accept="image/*" className="hidden" disabled={isUploading} onChange={(e) => handleImageUpload(e, (url: string) => setEditingNews({...editingNews, imageUrl: url}))} />
+                      </label>
+                      {editingNews.imageUrl && (
+                        <button 
+                          onClick={() => setEditingNews({...editingNews, imageUrl: undefined})}
+                          className="w-full py-2 text-[10px] font-bold text-red-500 hover:text-red-400 transition-colors"
+                        >
+                          이미지 삭제
+                        </button>
+                      )}
+                    </div>
+                  </div>
+               </div>
+
+               <div className="flex justify-end gap-4 pt-6 border-t border-white/5">
+                 <button onClick={() => setEditingNews(null)} className="px-8 py-3 text-sm font-bold text-white/40 hover:text-white transition-all">취소</button>
+                 <button 
+                   onClick={async () => { 
+                     await updateNews(editingNews.id, editingNews); 
+                     setEditingNews(null); 
+                   }} 
+                   className="px-12 py-3 bg-navy-primary text-white rounded-xl font-bold hover:bg-navy-light shadow-lg shadow-navy-primary/20 transition-all"
+                 >
+                   저장 완료
+                 </button>
+               </div>
+             </div>
+           </motion.div>
+         </div>
+      )}
+
+      <div className="glass-card overflow-hidden">
+        <table className="w-full text-left">
+          <thead className="bg-white/5 border-b border-white/10">
+            <tr>
+              <th className="px-6 py-4 text-[10px] font-bold text-white/40 uppercase tracking-widest">순서</th>
+              <th className="px-6 py-4 text-[10px] font-bold text-white/40 uppercase tracking-widest">카테고리</th>
+              <th className="px-6 py-4 text-[10px] font-bold text-white/40 uppercase tracking-widest">제목</th>
+              <th className="px-6 py-4 text-[10px] font-bold text-white/40 uppercase tracking-widest text-right">관리</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-white/5">
+            {news.map((post: any, index: number) => (
+              <tr key={post.id} className="hover:bg-white/5 transition-colors group">
+                <td className="px-6 py-4">
+                  <div className="flex flex-col gap-1">
+                    <button onClick={() => handleMoveNews(index, 'up')} disabled={index === 0} className="text-white/20 hover:text-white disabled:opacity-0"><ChevronUp size={14} /></button>
+                    <button onClick={() => handleMoveNews(index, 'down')} disabled={index === news.length - 1} className="text-white/20 hover:text-white disabled:opacity-0"><ChevronDown size={14} /></button>
+                  </div>
+                </td>
+                <td className="px-6 py-4">
+                  <span className="px-2 py-1 bg-navy-light/20 text-navy-light rounded text-[10px] font-bold">{post.category}</span>
+                </td>
+                <td className="px-6 py-4 font-medium">{post.title}</td>
+                <td className="px-6 py-4 text-right flex justify-end gap-2 opacity-40 group-hover:opacity-100 transition-opacity">
+                  <button onClick={() => setEditingNews(post)} className="p-2 text-navy-light hover:bg-navy-light/10 rounded-lg"><Edit3 size={18} /></button>
+                  <button onClick={() => { if(confirm('정말로 삭제하시겠습니까?')) removeNews(post.id); }} className="p-2 text-red-500 hover:bg-red-500/10 rounded-lg"><Trash2 size={18} /></button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </motion.div>
+  );
+}
+
+function PortfolioTab({ 
+  portfolio, 
+  addItem, 
+  removeItem, 
+  updateItem,
+  handleMovePortfolio,
+  handleImageUpload,
+  isUploading 
+}: { 
+  portfolio: any[], 
+  addItem: any, 
+  removeItem: any, 
+  updateItem: any,
+  handleMovePortfolio: any,
+  handleImageUpload: any,
+  isUploading: boolean
+}) {
+  const [isAddingProject, setIsAddingProject] = useState(false);
+  const [newProjectTitle, setNewProjectTitle] = useState('');
+  const [newProjectDesc, setNewProjectDesc] = useState('');
+  const [newProjectCategory, setNewProjectCategory] = useState('행사기획');
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-xl font-bold flex items-center gap-2">
+          <Layout size={24} className="text-navy-light" /> 포트폴리오 목록
+        </h2>
+        <button 
+          onClick={() => setIsAddingProject(!isAddingProject)}
+          className={`px-5 py-3 rounded-xl flex items-center gap-2 font-bold transition-all ${
+            isAddingProject 
+              ? 'bg-white/10 text-white border border-white/20' 
+              : 'bg-navy-primary text-white hover:bg-navy-light shadow-lg'
+          }`}
+        >
+          {isAddingProject ? '취소하기' : <><Plus size={18} /> 새 포트폴리오 추가</>}
+        </button>
+      </div>
+
+      {isAddingProject && (
+        <motion.div 
+          initial={{ opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: 'auto' }}
+          className="glass-card p-8 border-navy-light/30 border-2"
+        >
+          <h3 className="text-lg font-bold mb-6 flex items-center gap-2">
+            <Plus size={20} className="text-navy-light" /> 새 포트폴리오 정보 입력
+          </h3>
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-white/40 tracking-wider uppercase">포트폴리오 제목</label>
+                <input 
+                  type="text" 
+                  value={newProjectTitle}
+                  onChange={(e) => setNewProjectTitle(e.target.value)}
+                  placeholder="포트폴리오 명칭을 입력하세요"
+                  className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:border-navy-light focus:outline-none" 
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-white/40 tracking-wider uppercase">카테고리</label>
+                <select 
+                  value={newProjectCategory}
+                  onChange={(e) => setNewProjectCategory(e.target.value)}
+                  className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:border-navy-light focus:outline-none appearance-none"
+                >
+                  <option value="행사기획">행사기획</option>
+                  <option value="방송기획">방송기획</option>
+                  <option value="마케팅">마케팅</option>
+                  <option value="기타">기타</option>
+                </select>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-white/40 tracking-wider uppercase">상세 설명 (상세 페이지 노출)</label>
+              <textarea 
+                value={newProjectDesc}
+                onChange={(e) => setNewProjectDesc(e.target.value)}
+                placeholder="해당 프로젝트에 대한 상세 설명을 입력하세요"
+                className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:border-navy-light focus:outline-none h-24 resize-none" 
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-3 mt-8">
+            <button 
+              onClick={() => setIsAddingProject(false)}
+              className="px-6 py-2 rounded-xl text-sm font-bold text-white/40 hover:text-white transition-all"
+            >
+              취소
+            </button>
+            <button 
+              onClick={() => {
+                if (!newProjectTitle.trim()) return alert('제목을 입력하세요');
+                addItem({ 
+                  title: newProjectTitle, 
+                  description: newProjectDesc,
+                  category: newProjectCategory, 
+                  image: 'https://images.unsplash.com/photo-1540575861501-7ad0582371f3?auto=format&fit=crop&q=80' 
+                });
+                setNewProjectTitle('');
+                setNewProjectDesc('');
+                setIsAddingProject(false);
+              }}
+              className="px-8 py-2 bg-navy-primary text-white rounded-xl text-sm font-bold hover:bg-navy-light transition-all shadow-lg shadow-navy-primary/20"
+            >
+              추가 완료
+            </button>
+          </div>
+        </motion.div>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {portfolio.map((item, index) => (
+          <PortfolioItemCard 
+            key={`p-${item.id}`} 
+            item={item} 
+            index={index} 
+            total={portfolio.length}
+            removeItem={removeItem}
+            updateItem={updateItem}
+            handleMovePortfolio={handleMovePortfolio}
+            handleImageUpload={handleImageUpload}
+            isUploading={isUploading}
+          />
+        ))}
+      </div>
+    </motion.div>
+  );
+}
+
+function PortfolioItemCard({ item, index, total, removeItem, updateItem, handleMovePortfolio, handleImageUpload, isUploading }: any) {
+  const [localTitle, setLocalTitle] = useState(item.title);
+  const [localDesc, setLocalDesc] = useState(item.description || '');
+  
+  useEffect(() => {
+    setLocalTitle(item.title);
+    setLocalDesc(item.description || '');
+  }, [item]);
+
+  return (
+    <div className="glass-card overflow-hidden flex flex-col relative group/card border border-white/5 transition-all duration-300 hover:border-navy-light/30">
+      <div className="absolute top-2 left-2 z-10 opacity-0 group-hover/card:opacity-100 transition-opacity flex flex-col gap-1">
+        <button 
+          onClick={() => handleMovePortfolio(index, 'up')}
+          disabled={index === 0}
+          className="p-1.5 rounded-lg bg-black/60 hover:bg-black/80 text-white disabled:opacity-20 backdrop-blur-sm"
+        >
+          <ChevronUp size={14} />
+        </button>
+        <button 
+          onClick={() => handleMovePortfolio(index, 'down')}
+          disabled={index === total - 1}
+          className="p-1.5 rounded-lg bg-black/60 hover:bg-black/80 text-white disabled:opacity-20 backdrop-blur-sm"
+        >
+          <ChevronDown size={14} />
+        </button>
+      </div>
+      <div className="aspect-video relative overflow-hidden group">
+        <img src={item.image} alt={item.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
+        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+          <ImageIcon size={32} className="text-white/20" />
+        </div>
+      </div>
+      <div className="p-6 space-y-4 flex-grow">
+        <div className="grid grid-cols-1 gap-4">
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest leading-none">카테고리</label>
+            <select 
+              value={item.category}
+              onChange={(e) => updateItem(item.id, { category: e.target.value })}
+              className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-3 text-xs focus:border-navy-light focus:outline-none appearance-none cursor-pointer" 
+            >
+              <option value="행사기획">행사기획</option>
+              <option value="방송기획">방송기획</option>
+              <option value="마케팅">마케팅</option>
+              <option value="기타">기타</option>
+            </select>
+          </div>
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest leading-none">제목</label>
+            <input 
+              type="text" 
+              value={localTitle}
+              onChange={(e) => setLocalTitle(e.target.value)}
+              onBlur={() => {
+                if (localTitle !== item.title) {
+                  updateItem(item.id, { title: localTitle });
+                }
+              }}
+              className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-3 text-sm focus:border-navy-light focus:outline-none font-bold" 
+            />
+          </div>
+        </div>
+
+        <div className="space-y-1">
+          <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest leading-none">상세 설명</label>
+          <textarea 
+            value={localDesc}
+            onChange={(e) => setLocalDesc(e.target.value)}
+            onBlur={() => {
+              if (localDesc !== (item.description || '')) {
+                updateItem(item.id, { description: localDesc });
+              }
+            }}
+            placeholder="상세 내용을 입력하세요"
+            className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-3 text-[11px] focus:border-navy-light focus:outline-none h-16 resize-none leading-relaxed" 
+          />
+        </div>
+
+        <div className="space-y-1">
+          <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest leading-none">포트폴리오 이미지</label>
+          <label className={`block cursor-pointer group ${isUploading ? 'opacity-50 pointer-events-none' : ''}`}>
+            <div className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-3 text-[10px] text-white/40 group-hover:border-navy-light group-hover:text-white transition-all flex items-center gap-2">
+              <ImageIcon size={12} className={isUploading ? 'animate-pulse' : ''} /> 
+              {isUploading ? '이미지 처리 중...' : '이미지 교체하기...'}
+            </div>
+            <input 
+              type="file" 
+              accept="image/*"
+              className="hidden"
+              disabled={isUploading}
+              onChange={(e) => handleImageUpload(e, (url: string) => updateItem(item.id, { image: url }))}
+            />
+          </label>
+        </div>
+      </div>
+      <div className="px-6 py-4 border-t border-white/5 flex justify-end">
+        <button 
+          onClick={() => {
+            if (confirm('정말로 이 포트폴리오를 삭제하시겠습니까?')) removeItem(item.id);
+          }}
+          className="p-2 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500 hover:text-white transition-all"
+          title="삭제"
+        >
+          <Trash2 size={16} />
+        </button>
+      </div>
+    </div>
+  );
+}
 
 export function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<'settings' | 'news' | 'portfolio' | 'services' | 'home'>('settings');
@@ -187,67 +838,6 @@ export function AdminDashboard() {
     }
   };
 
-  const [isAddingProject, setIsAddingProject] = useState(false);
-  const [newProjectTitle, setNewProjectTitle] = useState('');
-  const [newProjectCategory, setNewProjectCategory] = useState('행사기획');
-
-  const [isAddingService, setIsAddingService] = useState(false);
-  const [newServiceTitle, setNewServiceTitle] = useState('');
-  const [newServiceDesc, setNewServiceDesc] = useState('');
-
-  const [isAddingNews, setIsAddingNews] = useState(false);
-  const [editingNews, setEditingNews] = useState<typeof news[0] | null>(null);
-  const [newNewsTitle, setNewNewsTitle] = useState('');
-  const [newNewsCategory, setNewNewsCategory] = useState<'공지사항' | '뉴스' | '포트폴리오'>('공지사항');
-
-  const handleAddProject = () => {
-    if (!newProjectTitle.trim()) {
-      alert('프로젝트 제목을 입력해주세요.');
-      return;
-    }
-    addItem({
-      title: newProjectTitle,
-      category: newProjectCategory,
-      image: 'https://images.unsplash.com/photo-1540575861501-7ad0582371f3?auto=format&fit=crop&q=80'
-    });
-    setNewProjectTitle('');
-    setIsAddingProject(false);
-    setSaveMessage('새 프로젝트가 추가되었습니다.');
-  };
-
-  const handleAddService = () => {
-    if (!newServiceTitle.trim()) {
-      alert('서비스 제목을 입력해주세요.');
-      return;
-    }
-    addService({
-      title: newServiceTitle,
-      description: newServiceDesc || '서비스 설명을 입력해주세요.',
-      icon: 'Star',
-      imageUrl: 'https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&q=80',
-      features: ['상세 항목을 추가하세요']
-    });
-    setNewServiceTitle('');
-    setNewServiceDesc('');
-    setIsAddingService(false);
-    setSaveMessage('새 서비스가 추가되었습니다.');
-  };
-
-  const handleAddNews = () => {
-    if (!newNewsTitle.trim()) {
-      alert('공지사항 제목을 입력해주세요.');
-      return;
-    }
-    addNews({
-      title: newNewsTitle,
-      content: '내용을 입력하세요.',
-      category: newNewsCategory
-    });
-    setNewNewsTitle('');
-    setIsAddingNews(false);
-    setSaveMessage('새 공지사항이 추가되었습니다.');
-  };
-
   const handleMoveService = async (index: number, direction: 'up' | 'down') => {
     const newServices = [...services];
     const newIndex = direction === 'up' ? index - 1 : index + 1;
@@ -278,6 +868,21 @@ export function AdminDashboard() {
     setSaveMessage('순서가 변경되었습니다.');
   };
 
+  const handleUpdateService = async (id: string, updates: any) => {
+    await updateService(id, updates);
+    setSaveMessage('서비스 정보가 저장되었습니다.');
+  };
+
+  const handleUpdateItem = async (id: number, updates: any) => {
+    await updateItem(id, updates);
+    setSaveMessage('포트폴리오 정보가 저장되었습니다.');
+  };
+
+  const handleUpdateNews = async (id: string, updates: any) => {
+    await updateNews(id, updates);
+    setSaveMessage('게시물이 저장되었습니다.');
+  };
+
   return (
     <div className="min-h-screen bg-navy-dark/30 flex">
       {/* Sidebar */}
@@ -290,8 +895,8 @@ export function AdminDashboard() {
         <nav className="flex-grow p-4 space-y-2">
           {[
             { id: 'settings', label: '사이트 설정', icon: Settings },
-            { id: 'home', label: '메인 화면 관리', icon: Layout },
-            { id: 'services', label: '서비스 관리', icon: Layout },
+            { id: 'home', label: '메인 화면 관리', icon: Palette },
+            { id: 'services', label: '서비스 관리', icon: Sparkles },
             { id: 'news', label: '공지사항 관리', icon: FileText },
             { id: 'portfolio', label: '포트폴리오 관리', icon: Layout },
           ].map((item, index) => (
@@ -535,645 +1140,39 @@ export function AdminDashboard() {
         )}
 
         {activeTab === 'services' && (
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-bold flex items-center gap-2">
-                <Layout size={24} className="text-navy-light" /> 서비스 목록
-              </h2>
-              <button 
-                onClick={() => setIsAddingService(!isAddingService)}
-                className={`px-5 py-3 rounded-xl flex items-center gap-2 font-bold transition-all ${
-                  isAddingService 
-                    ? 'bg-white/10 text-white border border-white/20' 
-                    : 'bg-navy-primary text-white hover:bg-navy-light shadow-lg'
-                }`}
-              >
-                {isAddingService ? '취소하기' : <><Plus size={18} /> 새 서비스 추가</>}
-              </button>
-            </div>
-
-            {isAddingService && (
-              <motion.div 
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                className="glass-card p-8 border-navy-light/30 border-2"
-              >
-                <h3 className="text-lg font-bold mb-6 flex items-center gap-2">
-                  <Plus size={20} className="text-navy-light" /> 새 서비스 정보 입력
-                </h3>
-                <div className="space-y-4 mb-6">
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-white/40 tracking-wider">서비스 명칭</label>
-                    <input 
-                      type="text" 
-                      value={newServiceTitle}
-                      onChange={(e) => setNewServiceTitle(e.target.value)}
-                      placeholder="서비스 제목을 입력하세요"
-                      className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:border-navy-light focus:outline-none" 
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-white/40 tracking-wider">서비스 설명</label>
-                    <textarea 
-                      value={newServiceDesc}
-                      onChange={(e) => setNewServiceDesc(e.target.value)}
-                      placeholder="서비스에 대한 간략한 설명을 입력하세요"
-                      className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:border-navy-light focus:outline-none h-24 resize-none" 
-                    />
-                  </div>
-                </div>
-                <div className="flex justify-end gap-3">
-                  <button 
-                    onClick={() => setIsAddingService(false)}
-                    className="px-6 py-2 rounded-xl text-sm font-bold text-white/40 hover:text-white transition-all"
-                  >
-                    취소
-                  </button>
-                  <button 
-                    onClick={handleAddService}
-                    className="px-8 py-2 bg-navy-primary text-white rounded-xl text-sm font-bold hover:bg-navy-light transition-all shadow-lg"
-                  >
-                    추가 완료
-                  </button>
-                </div>
-              </motion.div>
-            )}
-
-            <div className="grid grid-cols-1 gap-6">
-              {localServices.map((service, index) => (
-                <div key={`service-${service.id}-${index}`} className="glass-card p-8 flex flex-col lg:flex-row gap-8 relative">
-                  {/* Reorder Controls */}
-                  <div className="absolute top-4 right-4 flex flex-col gap-2">
-                    <button 
-                      onClick={() => handleMoveService(index, 'up')}
-                      disabled={index === 0}
-                      className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/40 hover:text-white disabled:opacity-20 transition-all"
-                    >
-                      <ChevronUp size={16} />
-                    </button>
-                    <button 
-                      onClick={() => handleMoveService(index, 'down')}
-                      disabled={index === services.length - 1}
-                      className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/40 hover:text-white disabled:opacity-20 transition-all"
-                    >
-                      <ChevronDown size={16} />
-                    </button>
-                  </div>
-                  <div className="w-full lg:w-48 h-32 rounded-xl overflow-hidden shrink-0">
-                    <img src={service.imageUrl} alt={service.title} className="w-full h-full object-cover" />
-                  </div>
-                  <div className="flex-grow space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest leading-none">서비스 제목</label>
-                        <input 
-                          type="text" 
-                          value={service.title}
-                          onChange={(e) => {
-                            const newServices = [...localServices];
-                            newServices[index] = { ...service, title: e.target.value };
-                            setLocalServices(newServices);
-                            setIsDirty(true);
-                          }}
-                          className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-3 text-sm focus:border-navy-light focus:outline-none" 
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest leading-none">아이콘 (Lucide 코네임)</label>
-                        <input 
-                          type="text" 
-                          value={service.icon}
-                          onChange={(e) => {
-                            const newServices = [...localServices];
-                            newServices[index] = { ...service, icon: e.target.value };
-                            setLocalServices(newServices);
-                            setIsDirty(true);
-                          }}
-                          className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-3 text-sm focus:border-navy-light focus:outline-none" 
-                        />
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest leading-none">설명</label>
-                      <textarea 
-                        value={service.description}
-                        onChange={(e) => {
-                          const newServices = [...localServices];
-                          newServices[index] = { ...service, description: e.target.value };
-                          setLocalServices(newServices);
-                          setIsDirty(true);
-                        }}
-                        className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-3 text-sm focus:border-navy-light focus:outline-none h-20 resize-none" 
-                      />
-                    </div>
-                    <div className="space-y-4">
-                      <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest leading-none">상세 항목 (Features)</label>
-                      <div className="space-y-2">
-                        {service.features?.map((feature, fIndex) => (
-                          <div key={`${service.id}-feature-${fIndex}`} className="flex gap-2">
-                            <input 
-                              type="text" 
-                              value={feature}
-                              onChange={(e) => {
-                                const newServices = [...localServices];
-                                const newFeatures = [...(service.features || [])];
-                                newFeatures[fIndex] = e.target.value;
-                                newServices[index] = { ...service, features: newFeatures };
-                                setLocalServices(newServices);
-                                setIsDirty(true);
-                              }}
-                              className="flex-grow bg-white/5 border border-white/10 rounded-lg py-2 px-3 text-sm focus:border-navy-light focus:outline-none" 
-                            />
-                            <button 
-                              onClick={() => {
-                                const newServices = [...localServices];
-                                const newFeatures = (service.features || []).filter((_, i) => i !== fIndex);
-                                newServices[index] = { ...service, features: newFeatures };
-                                setLocalServices(newServices);
-                                setIsDirty(true);
-                              }}
-                              className="p-2 text-red-500 hover:bg-red-500/10 rounded-lg transition-colors border border-white/5"
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                          </div>
-                        ))}
-                        <button 
-                          onClick={() => {
-                            const newServices = [...localServices];
-                            const newFeatures = [...(service.features || []), '새로운 항목'];
-                            newServices[index] = { ...service, features: newFeatures };
-                            setLocalServices(newServices);
-                            setIsDirty(true);
-                          }}
-                          className="w-full py-2 bg-white/5 border border-dashed border-white/20 rounded-lg text-xs text-white/40 hover:text-white hover:border-navy-light transition-all flex items-center justify-center gap-2"
-                        >
-                          <Plus size={14} /> 항목 추가
-                        </button>
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest leading-none">서비스 이미지 (파일 첨부)</label>
-                      <label className={`block cursor-pointer group ${isUploading ? 'opacity-50 pointer-events-none' : ''}`}>
-                        <div className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-3 text-xs text-white/40 group-hover:border-navy-light group-hover:text-white transition-all flex items-center gap-2">
-                          <ImageIcon size={14} className={isUploading ? 'animate-pulse' : ''} /> 
-                          {isUploading ? '이미지 처리 중...' : '이미지 교체하기...'}
-                        </div>
-                        <input 
-                          type="file" 
-                          accept="image/*"
-                          className="hidden"
-                          disabled={isUploading}
-                          onChange={(e) => handleImageUpload(e, (url) => {
-                            const newServices = [...localServices];
-                            newServices[index] = { ...service, imageUrl: url };
-                            setLocalServices(newServices);
-                            setIsDirty(true);
-                          })}
-                        />
-                      </label>
-                    </div>
-                  </div>
-                  <div className="flex lg:flex-col justify-end gap-2">
-                    <button 
-                      onClick={() => {
-                        if (confirm('이 서비스를 삭제하시겠습니까?')) removeService(service.id);
-                      }}
-                      className="p-3 bg-red-500/10 text-red-500 rounded-xl hover:bg-red-500 transition-all hover:text-white"
-                    >
-                      <Trash2 size={20} />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </motion.div>
+          <ServicesTab 
+            services={services}
+            addService={addService}
+            removeService={removeService}
+            updateService={handleUpdateService}
+            handleMoveService={handleMoveService}
+            handleImageUpload={handleImageUpload}
+            isUploading={isUploading}
+          />
         )}
 
         {activeTab === 'news' && (
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-bold flex items-center gap-2">
-                <FileText size={24} className="text-navy-light" /> 공지사항 목록
-              </h2>
-              <button 
-                onClick={() => setIsAddingNews(!isAddingNews)}
-                className={`px-5 py-3 rounded-xl flex items-center gap-2 font-bold transition-all ${
-                  isAddingNews 
-                    ? 'bg-white/10 text-white border border-white/20' 
-                    : 'bg-navy-primary text-white hover:bg-navy-light shadow-lg'
-                }`}
-              >
-                {isAddingNews ? '취소하기' : <><Plus size={18} /> 새 글 작성하기</>}
-              </button>
-            </div>
-
-            {isAddingNews && (
-              <motion.div 
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                className="glass-card p-8 border-navy-light/30 border-2 mb-8"
-              >
-                <h3 className="text-lg font-bold mb-6 flex items-center gap-2">
-                  <Plus size={20} className="text-navy-light" /> 새 공지사항 정보 입력
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-white/40 tracking-wider">제목</label>
-                    <input 
-                      type="text" 
-                      value={newNewsTitle}
-                      onChange={(e) => setNewNewsTitle(e.target.value)}
-                      placeholder="공지사항 제목을 입력하세요"
-                      className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:border-navy-light focus:outline-none" 
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-white/40 tracking-wider">카테고리</label>
-                    <select 
-                      value={newNewsCategory}
-                      onChange={(e) => setNewNewsCategory(e.target.value as any)}
-                      className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:border-navy-light focus:outline-none"
-                    >
-                      <option value="공지사항">공지사항</option>
-                      <option value="뉴스">뉴스</option>
-                      <option value="포트폴리오">포트폴리오</option>
-                    </select>
-                  </div>
-                </div>
-                <div className="flex justify-end gap-3">
-                  <button 
-                    onClick={() => setIsAddingNews(false)}
-                    className="px-6 py-2 rounded-xl text-sm font-bold text-white/40 hover:text-white transition-all"
-                  >
-                    취소
-                  </button>
-                  <button 
-                    onClick={handleAddNews}
-                    className="px-8 py-2 bg-navy-primary text-white rounded-xl text-sm font-bold hover:bg-navy-light transition-all shadow-lg"
-                  >
-                    작성 완료
-                  </button>
-                </div>
-              </motion.div>
-            )}
-
-            {editingNews && (
-              <motion.div 
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/80 backdrop-blur-sm"
-              >
-                <div className="glass-card w-full max-w-4xl max-h-[90vh] overflow-y-auto p-8 border-navy-light/30 border-2 shadow-2xl relative">
-                  <button 
-                    onClick={() => setEditingNews(null)}
-                    className="absolute top-6 right-6 text-white/40 hover:text-white transition-all"
-                  >
-                    닫기
-                  </button>
-                  
-                  <h3 className="text-2xl font-bold mb-8 flex items-center gap-3">
-                    <Edit3 size={24} className="text-navy-light" /> 게시물 수정하기
-                  </h3>
-                  
-                  <div className="space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="space-y-2">
-                        <label className="text-xs font-bold text-white/40 tracking-wider">제목</label>
-                        <input 
-                          type="text" 
-                          value={editingNews.title}
-                          onChange={(e) => setEditingNews({ ...editingNews, title: e.target.value })}
-                          className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:border-navy-light focus:outline-none" 
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-xs font-bold text-white/40 tracking-wider">카테고리</label>
-                        <select 
-                          value={editingNews.category}
-                          onChange={(e) => setEditingNews({ ...editingNews, category: e.target.value as any })}
-                          className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:border-navy-light focus:outline-none"
-                        >
-                          <option value="공지사항">공지사항</option>
-                          <option value="뉴스">뉴스</option>
-                          <option value="포트폴리오">포트폴리오</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold text-white/40 tracking-wider">상세 내용</label>
-                      <textarea 
-                        value={editingNews.content}
-                        onChange={(e) => setEditingNews({ ...editingNews, content: e.target.value })}
-                        className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:border-navy-light focus:outline-none h-64 resize-none leading-relaxed"
-                        placeholder="공지사항 내용을 입력하세요..."
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold text-white/40 tracking-wider">대표 이미지 (선택)</label>
-                      <div className="flex items-center gap-4">
-                        {editingNews.imageUrl && (
-                          <div className="w-24 h-16 rounded overflow-hidden border border-white/10 shrink-0">
-                            <img src={editingNews.imageUrl} alt="preview" className="w-full h-full object-cover" />
-                          </div>
-                        )}
-                        <label className={`flex-grow cursor-pointer group ${isUploading ? 'opacity-50 pointer-events-none' : ''}`}>
-                          <div className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 text-xs text-white/40 group-hover:border-navy-light group-hover:text-white transition-all flex items-center gap-2">
-                            <ImageIcon size={14} className={isUploading ? 'animate-pulse' : ''} /> 
-                            {isUploading ? '이미지 처리 중...' : '이미지 교체/추가...'}
-                          </div>
-                          <input 
-                            type="file" 
-                            accept="image/*"
-                            className="hidden"
-                            disabled={isUploading}
-                            onChange={(e) => handleImageUpload(e, (url) => {
-                              setEditingNews({ ...editingNews, imageUrl: url });
-                            })}
-                          />
-                        </label>
-                        {editingNews.imageUrl && (
-                          <button 
-                            onClick={() => setEditingNews({ ...editingNews, imageUrl: undefined })}
-                            className="p-3 text-red-500 hover:bg-red-500/10 rounded-xl border border-white/5"
-                            title="이미지 제거"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="flex justify-end gap-3 pt-6 border-t border-white/5">
-                      <button 
-                        onClick={() => setEditingNews(null)}
-                        className="px-8 py-3 rounded-xl text-sm font-bold text-white/40 hover:text-white transition-all"
-                      >
-                        취소
-                      </button>
-                      <button 
-                        onClick={async () => {
-                          if (editingNews) {
-                            await updateNews(editingNews.id, editingNews);
-                            setEditingNews(null);
-                            setSaveMessage('게시물이 수정되었습니다.');
-                          }
-                        }}
-                        className="px-10 py-3 bg-navy-primary text-white rounded-xl text-sm font-bold hover:bg-navy-light transition-all shadow-lg flex items-center gap-2"
-                      >
-                        <Save size={18} /> 수정 내용 저장
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-
-            <div className="glass-card overflow-hidden">
-              <table className="w-full text-left">
-                <thead className="bg-white/5 border-b border-white/10">
-                  <tr>
-                    <th className="px-6 py-4 text-xs font-bold uppercase tracking-widest text-white/40">순서</th>
-                    <th className="px-6 py-4 text-xs font-bold uppercase tracking-widest text-white/40">카테고리</th>
-                    <th className="px-6 py-4 text-xs font-bold uppercase tracking-widest text-white/40">제목</th>
-                    <th className="px-6 py-4 text-xs font-bold uppercase tracking-widest text-white/40">작성일</th>
-                    <th className="px-6 py-4 text-xs font-bold uppercase tracking-widest text-white/40 text-right">관리</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5">
-                  {localNews.map((post, index) => (
-                    <tr key={`news-${post.id}-${index}`} className="hover:bg-white/5 transition-colors">
-                      <td className="px-6 py-4">
-                        <div className="flex flex-col gap-1">
-                          <button 
-                            onClick={() => handleMoveNews(index, 'up')}
-                            disabled={index === 0}
-                            className="p-1 rounded bg-white/5 hover:bg-white/10 text-white/40 hover:text-white disabled:opacity-20"
-                          >
-                            <ChevronUp size={12} />
-                          </button>
-                          <button 
-                            onClick={() => handleMoveNews(index, 'down')}
-                            disabled={index === news.length - 1}
-                            className="p-1 rounded bg-white/5 hover:bg-white/10 text-white/40 hover:text-white disabled:opacity-20"
-                          >
-                            <ChevronDown size={12} />
-                          </button>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <select
-                          value={post.category}
-                          onChange={(e) => {
-                            const newNews = [...localNews];
-                            newNews[index] = { ...post, category: e.target.value as any };
-                            setLocalNews(newNews);
-                            setIsDirty(true);
-                          }}
-                          className="text-xs px-2 py-1 bg-navy-primary/20 text-navy-light rounded font-bold border-none focus:outline-none appearance-none cursor-pointer"
-                        >
-                          <option value="공지사항">공지사항</option>
-                          <option value="뉴스">뉴스</option>
-                        </select>
-                      </td>
-                      <td className="px-6 py-4 font-medium">
-                        <input 
-                          type="text"
-                          value={post.title}
-                          onChange={(e) => {
-                            const newNews = [...localNews];
-                            newNews[index] = { ...post, title: e.target.value };
-                            setLocalNews(newNews);
-                            setIsDirty(true);
-                          }}
-                          className="bg-transparent border-none focus:outline-none w-full"
-                        />
-                      </td>
-                      <td className="px-6 py-4 text-sm text-white/40">
-                        {new Date(post.createdAt).toLocaleDateString()}
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <div className="inline-flex gap-2">
-                          <button 
-                            onClick={() => setEditingNews(post)}
-                            className="p-2 hover:bg-navy-light rounded-lg transition-colors text-navy-light hover:text-white"
-                            title="내용 수정"
-                          >
-                            <Edit3 size={16} />
-                          </button>
-                          <button 
-                            onClick={() => {
-                               if (confirm('정말로 삭제하시겠습니까?')) removeNews(post.id);
-                            }}
-                            className="p-2 hover:bg-red-500 rounded-lg transition-colors text-red-500 hover:text-white"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                  {localNews.length === 0 && (
-                    <tr>
-                      <td colSpan={4} className="px-6 py-12 text-center text-white/20 italic">
-                        작성된 공지사항이 없습니다.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </motion.div>
+          <NewsTab 
+            news={news}
+            addNews={addNews}
+            removeNews={removeNews}
+            updateNews={handleUpdateNews}
+            handleMoveNews={handleMoveNews}
+            handleImageUpload={handleImageUpload}
+            isUploading={isUploading}
+          />
         )}
 
         {activeTab === 'portfolio' && (
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-bold flex items-center gap-2">
-                <Layout size={24} className="text-navy-light" /> 프로젝트 목록
-              </h2>
-              <button 
-                onClick={() => setIsAddingProject(!isAddingProject)}
-                className={`px-5 py-3 rounded-xl flex items-center gap-2 font-bold transition-all ${
-                  isAddingProject 
-                    ? 'bg-white/10 text-white border border-white/20' 
-                    : 'bg-navy-primary text-white hover:bg-navy-light shadow-lg'
-                }`}
-              >
-                {isAddingProject ? '취소하기' : <><Plus size={18} /> 프로젝트 추가하기</>}
-              </button>
-            </div>
-
-            {isAddingProject && (
-              <motion.div 
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                className="glass-card p-8 border-navy-light/30 border-2"
-              >
-                <h3 className="text-lg font-bold mb-6 flex items-center gap-2">
-                  <Plus size={20} className="text-navy-light" /> 새 프로젝트 정보 입력
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-white/40 tracking-wider">프로젝트 제목</label>
-                    <input 
-                      type="text" 
-                      value={newProjectTitle}
-                      onChange={(e) => setNewProjectTitle(e.target.value)}
-                      placeholder="프로젝트 명칭을 입력하세요"
-                      className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:border-navy-light focus:outline-none" 
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-white/40 tracking-wider">카테고리</label>
-                    <select 
-                      value={newProjectCategory}
-                      onChange={(e) => setNewProjectCategory(e.target.value)}
-                      className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:border-navy-light focus:outline-none"
-                    >
-                      <option value="행사기획">행사기획</option>
-                      <option value="방송기획">방송기획</option>
-                      <option value="마케팅">마케팅</option>
-                      <option value="기타">기타</option>
-                    </select>
-                  </div>
-                </div>
-                <div className="flex justify-end gap-3">
-                  <button 
-                    onClick={() => setIsAddingProject(false)}
-                    className="px-6 py-2 rounded-xl text-sm font-bold text-white/40 hover:text-white transition-all"
-                  >
-                    취소
-                  </button>
-                  <button 
-                    onClick={handleAddProject}
-                    className="px-8 py-2 bg-navy-primary text-white rounded-xl text-sm font-bold hover:bg-navy-light transition-all shadow-lg"
-                  >
-                    추가 완료
-                  </button>
-                </div>
-              </motion.div>
-            )}
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {portfolio.map((item, index) => (
-                <div key={`portfolio-${item.id}-${index}`} className="glass-card overflow-hidden flex flex-col relative group/card">
-                  {/* Reorder Buttons */}
-                  <div className="absolute top-2 left-2 z-10 opacity-0 group-hover/card:opacity-100 transition-opacity flex flex-col gap-1">
-                    <button 
-                      onClick={() => handleMovePortfolio(index, 'up')}
-                      disabled={index === 0}
-                      className="p-1.5 rounded-lg bg-black/60 hover:bg-black/80 text-white disabled:opacity-20"
-                    >
-                      <ChevronUp size={14} />
-                    </button>
-                    <button 
-                      onClick={() => handleMovePortfolio(index, 'down')}
-                      disabled={index === portfolio.length - 1}
-                      className="p-1.5 rounded-lg bg-black/60 hover:bg-black/80 text-white disabled:opacity-20"
-                    >
-                      <ChevronDown size={14} />
-                    </button>
-                  </div>
-                  <div className="aspect-video relative overflow-hidden group">
-                    <img src={item.image} alt={item.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
-                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                      <ImageIcon size={32} className="text-white/20" />
-                    </div>
-                  </div>
-                  <div className="p-6 space-y-4 flex-grow">
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest">카테고리</label>
-                      <input 
-                        type="text" 
-                        value={item.category}
-                        onChange={(e) => updateItem(item.id, { category: e.target.value })}
-                        className="w-full bg-white/5 border border-white/10 rounded-lg py-1.5 px-3 text-xs focus:border-navy-light focus:outline-none" 
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest">제목</label>
-                      <input 
-                        type="text" 
-                        value={item.title}
-                        onChange={(e) => updateItem(item.id, { title: e.target.value })}
-                        className="w-full bg-white/5 border border-white/10 rounded-lg py-1.5 px-3 text-sm focus:border-navy-light focus:outline-none font-bold" 
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest">이미지 (파일 첨부)</label>
-                      <label className={`block cursor-pointer group ${isUploading ? 'opacity-50 pointer-events-none' : ''}`}>
-                        <div className="w-full bg-white/5 border border-white/10 rounded-lg py-1.5 px-3 text-[10px] text-white/40 group-hover:border-navy-light group-hover:text-white transition-all flex items-center gap-2">
-                          <ImageIcon size={12} className={isUploading ? 'animate-pulse' : ''} /> 
-                          {isUploading ? '이미지 처리 중...' : '이미지 교체하기...'}
-                        </div>
-                        <input 
-                          type="file" 
-                          accept="image/*"
-                          className="hidden"
-                          disabled={isUploading}
-                          onChange={(e) => handleImageUpload(e, (url) => updateItem(item.id, { image: url }))}
-                        />
-                      </label>
-                    </div>
-                  </div>
-                  <div className="px-6 py-4 border-t border-white/5 flex justify-end">
-                    <button 
-                      onClick={() => {
-                        if (confirm('정말로 이 프로젝트를 삭제하시겠습니까?')) removeItem(item.id);
-                      }}
-                      className="p-2 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500 hover:text-white transition-all"
-                      title="삭제"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </motion.div>
+          <PortfolioTab 
+            portfolio={portfolio}
+            addItem={addItem}
+            removeItem={removeItem}
+            updateItem={handleUpdateItem}
+            handleMovePortfolio={handleMovePortfolio}
+            handleImageUpload={handleImageUpload}
+            isUploading={isUploading}
+          />
         )}
       </main>
     </div>

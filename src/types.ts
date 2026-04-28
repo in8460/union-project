@@ -84,6 +84,7 @@ export interface PortfolioItem {
   title: string;
   category: string;
   image: string;
+  description?: string;
   order?: number;
 }
 
