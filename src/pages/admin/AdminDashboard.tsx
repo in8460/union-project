@@ -77,19 +77,33 @@ export function AdminDashboard() {
   const handleImageUpload = (e: ChangeEvent<HTMLInputElement>, callback: (url: string) => void) => {
     const file = e.target.files?.[0];
     if (file) {
+      if (file.size > 10 * 1024 * 1024) { // 10MB limit for raw upload
+        alert('파일이 너무 큽니다. 10MB 이하의 이미지를 선택해주세요.');
+        return;
+      }
+
       setIsUploading(true);
       const reader = new FileReader();
       
       reader.onloadend = async () => {
         if (reader.result) {
           try {
-            // Compress image to 1200px max and 70% quality
-            const compressed = await compressImage(reader.result as string, 1200, 1200, 0.7);
+            // Compress image to ensure it fits in Firestore (1MB limit)
+            const compressed = await compressImage(reader.result as string, 1000, 1000, 0.6);
+            
+            // Final check
+            const sizeKB = Math.round((compressed.length * 3) / 4 / 1024);
+            if (sizeKB > 950) {
+              alert(`압축 후에도 이미지 크기가 너무 큽니다 (${sizeKB}KB). 다른 이미지를 선택하거나 크기를 줄여주세요.`);
+              setIsUploading(false);
+              return;
+            }
+
             callback(compressed);
-            setSaveMessage('이미지가 압축되어 성공적으로 교체되었습니다.');
+            setSaveMessage('이미지가 최적화되어 성공적으로 적용되었습니다.');
           } catch (error) {
-            console.error('Compression failed:', error);
-            callback(reader.result as string); // Fallback to original
+            console.error('이미지 처리 실패:', error);
+            alert('이미지 최적화 중 오류가 발생했습니다.');
           } finally {
             setIsUploading(false);
           }

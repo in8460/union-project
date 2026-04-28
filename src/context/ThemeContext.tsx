@@ -69,10 +69,13 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         localforage.setItem('union_settings', data);
         document.documentElement.style.setProperty('--primary-color', data.primaryColor);
       } else {
-        // First time initialization
-        setDoc(doc(db, 'siteConfig', 'settings'), INITIAL_SETTINGS);
+        // If document doesn't exist, we just live with INITIAL_SETTINGS.
+        // DO NOT try to setDoc here, as it will fail for non-admin users.
+        // Normal initialization should happen when an admin first saves settings.
+        console.log('Site settings not found in Firestore, using defaults.');
       }
     }, (error) => {
+      // If it's just a 403 on a non-existent doc, we can be quiet, but handleFirestoreError is helpful for debugging.
       handleFirestoreError(error, OperationType.GET, 'siteConfig/settings');
     });
 

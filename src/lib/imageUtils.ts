@@ -1,4 +1,4 @@
-export async function compressImage(base64Str: string, maxWidth = 1200, maxHeight = 1200, quality = 0.7): Promise<string> {
+export async function compressImage(base64Str: string, maxWidth = 1000, maxHeight = 1000, quality = 0.6): Promise<string> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.src = base64Str;
@@ -30,6 +30,22 @@ export async function compressImage(base64Str: string, maxWidth = 1200, maxHeigh
       ctx.drawImage(img, 0, 0, width, height);
 
       const compressedBase64 = canvas.toDataURL('image/jpeg', quality);
+      
+      // Check if size is within Firestore limits (approx 1MB limit, keeping safe at 800KB)
+      const sizeInBytes = Math.round((compressedBase64.length * 3) / 4);
+      if (sizeInBytes > 800000) {
+        // If still too large, try even smaller
+        const extremeCanvas = document.createElement('canvas');
+        extremeCanvas.width = width * 0.7;
+        extremeCanvas.height = height * 0.7;
+        const extremeCtx = extremeCanvas.getContext('2d');
+        if (extremeCtx) {
+          extremeCtx.drawImage(canvas, 0, 0, extremeCanvas.width, extremeCanvas.height);
+          resolve(extremeCanvas.toDataURL('image/jpeg', quality * 0.8));
+          return;
+        }
+      }
+      
       resolve(compressedBase64);
     };
     img.onerror = (err) => reject(err);
